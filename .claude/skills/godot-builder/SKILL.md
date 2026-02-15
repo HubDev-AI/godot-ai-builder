@@ -15,10 +15,14 @@ Analyze the user's request, decompose it into tasks, and execute using specializ
 
 ## Execution Flow
 
+### 0. Full Game Request → Use Director
+If the user asks to **create a complete game** (not just a feature), load `godot-director` FIRST.
+The Director handles: PRD generation → phased build → quality gates → polish.
+
 ### 1. Understand the Request
 Parse the user's prompt to determine:
 - **Genre**: shooter, platformer, puzzle, RPG, strategy, sandbox, custom
-- **Scope**: new project vs. modify existing
+- **Scope**: new project vs. modify existing vs. full game (→ director)
 - **Features**: player, enemies, UI, audio, physics, save system, etc.
 
 ### 2. Scan Project State
@@ -31,7 +35,8 @@ ALWAYS call `godot_get_project_state` first to check:
 
 | User Intent | Skills to Load (in order) |
 |---|---|
-| "Create a new game" | `godot-init` → `godot-templates` → `godot-player` → `godot-enemies` → `godot-ui` → `godot-effects` → `godot-ops` |
+| "Create/build a complete game" | `godot-director` (handles everything) |
+| "Create a new game" | `godot-director` → phases 0-6 |
 | "Add enemies" | `godot-enemies` → `godot-physics` |
 | "Add UI / menu" | `godot-ui` |
 | "Add sound / effects" | `godot-effects` |
@@ -40,6 +45,7 @@ ALWAYS call `godot_get_project_state` first to check:
 | "Add player movement" | `godot-player` |
 | "Add physics / collisions" | `godot-physics` |
 | "Build a scene" | `godot-scene-arch` |
+| "Make it look good" | `godot-polish` |
 | "How to X in GDScript" | `godot-gdscript` |
 
 ### 4. Execute Build
