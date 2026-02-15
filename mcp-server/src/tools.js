@@ -48,10 +48,16 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_get_errors",
     description:
-      "Get current errors and warnings from the Godot editor: script parse errors, scene load errors, and runtime errors. Use this after running a scene to check for problems.",
+      "Get current errors and warnings from the Godot editor. By default runs headless Godot validation which returns DETAILED error messages with file paths, line numbers, and actual error text (takes 2-5 seconds). Set detailed=false for a fast check that only tells you WHICH files have errors but not WHY.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        detailed: {
+          type: "boolean",
+          description:
+            "Run headless Godot validation for detailed error messages with line numbers (default: true). Set to false for a fast check.",
+        },
+      },
     },
   },
   {
@@ -361,7 +367,7 @@ export async function handleToolCall(name, args) {
     case "godot_stop_scene":
       return await toolStopScene();
     case "godot_get_errors":
-      return await toolGetErrors();
+      return await toolGetErrors(args.detailed !== false);
     case "godot_reload_filesystem":
       return await toolReloadFilesystem();
     case "godot_parse_scene":
@@ -454,13 +460,32 @@ async function toolStopScene() {
   return await bridge.stopScene();
 }
 
-async function toolGetErrors() {
-  await bridge.sendLog("[MCP] Checking for errors...");
-  const result = await bridge.getErrors();
-  const errCount = result.errors?.length || 0;
-  const warnCount = result.warnings?.length || 0;
-  await bridge.sendLog(`[MCP] Errors: ${errCount}, Warnings: ${warnCount}`);
-  return result;
+async function toolGetErrors(detailed = true) {
+  if (detailed) {
+    await bridge.sendLog("[MCP] Running detailed error check (headless validation)...");
+    try {
+      const result = await bridge.getDetailedErrors();
+      const errCount = result.errors?.length || 0;
+      const warnCount = result.warnings?.length || 0;
+      await bridge.sendLog(`[MCP] Detailed check: ${errCount} errors, ${warnCount} warnings`);
+      return result;
+    } catch (err) {
+      // If detailed check fails (timeout, etc.), fall back to fast check
+      await bridge.sendLog(`[MCP] Detailed check failed (${err.message}), falling back to fast check...`);
+      const result = await bridge.getErrors();
+      const errCount = result.errors?.length || 0;
+      const warnCount = result.warnings?.length || 0;
+      await bridge.sendLog(`[MCP] Fast check: ${errCount} errors, ${warnCount} warnings`);
+      return result;
+    }
+  } else {
+    await bridge.sendLog("[MCP] Running fast error check...");
+    const result = await bridge.getErrors();
+    const errCount = result.errors?.length || 0;
+    const warnCount = result.warnings?.length || 0;
+    await bridge.sendLog(`[MCP] Errors: ${errCount}, Warnings: ${warnCount}`);
+    return result;
+  }
 }
 
 async function toolReloadFilesystem() {

@@ -11,9 +11,9 @@ function bridgeUrl(path) {
   return `http://${BRIDGE_HOST}:${BRIDGE_PORT}${path}`;
 }
 
-async function bridgeRequest(method, path, body = null) {
+async function bridgeRequest(method, path, body = null, timeoutMs = BRIDGE_TIMEOUT) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BRIDGE_TIMEOUT);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const opts = {
@@ -116,6 +116,11 @@ export async function getEditorScreenshot(viewport) {
 
 export async function getOpenScripts() {
   return bridgeRequest("GET", "/open_scripts");
+}
+
+export async function getDetailedErrors() {
+  // Headless Godot validation takes 2-10 seconds — use longer timeout
+  return bridgeRequest("GET", "/detailed_errors", null, 30000);
 }
 
 export async function isConnected() {

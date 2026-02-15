@@ -172,6 +172,8 @@ func _route(method: String, path: String, body: Dictionary) -> Dictionary:
 			return {"code": 200, "data": _handle_screenshot(query_params)}
 		["GET", "/open_scripts"]:
 			return {"code": 200, "data": _handle_open_scripts()}
+		["GET", "/detailed_errors"]:
+			return {"code": 200, "data": _handle_detailed_errors()}
 		_:
 			return {"code": 404, "data": {"error": "not found", "path": path}}
 
@@ -604,6 +606,16 @@ func _handle_screenshot(query: Dictionary) -> Dictionary:
 	var png_bytes: PackedByteArray = img.save_png_to_buffer()
 	var base64: String = Marshalls.raw_to_base64(png_bytes)
 	return {"image": base64, "width": img.get_width(), "height": img.get_height()}
+
+
+func _handle_detailed_errors() -> Dictionary:
+	bridge_log.emit("Running detailed error check (headless validation)...")
+	var detailed = _error_collector.get_detailed_errors()
+	var warnings = _error_collector.get_warnings()
+	return {
+		"errors": detailed,
+		"warnings": warnings,
+	}
 
 
 func _handle_open_scripts() -> Dictionary:

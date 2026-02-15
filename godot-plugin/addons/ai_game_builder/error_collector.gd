@@ -228,6 +228,85 @@ func _extract_file_ref(text: String) -> Dictionary:
 	return {}
 
 
+## Runs a headless Godot process to get detailed script error messages with
+## file paths, line numbers, and actual error text.  BLOCKING — takes 2-5 s.
+## Falls back to the fast can_instantiate() list if headless validation fails.
+func get_detailed_errors() -> Array[Dictionary]:
+	var godot_path: String = OS.get_executable_path()
+	var project_path: String = ProjectSettings.globalize_path("res://")
+
+	var output: Array = []
+	var exit_code: int = OS.execute(
+		godot_path,
+		PackedStringArray(["--headless", "--path", project_path, "--quit"]),
+		output,
+		true   # read_stderr — error messages go to stderr
+	)
+
+	if output.is_empty():
+		# Headless validation produced no output — fall back to basic errors
+		return get_errors()
+
+	var full_output: String = str(output[0])
+	var errors: Array[Dictionary] = []
+	var lines: PackedStringArray = full_output.split("\n")
+
+	for i in range(lines.size()):
+		var line: String = lines[i].strip_edges()
+		if line.is_empty():
+			continue
+
+		var is_error: bool = false
+		if "SCRIPT ERROR:" in line or "Parse Error:" in line or "Parser Error:" in line:
+			is_error = true
+		elif "Cannot load source code from" in line:
+			is_error = true
+		elif "error" in line.to_lower() and "res://" in line and ".gd" in line:
+			is_error = true
+
+		if not is_error:
+			continue
+
+		# Build the full multi-line error message (Godot often splits across 2-3 lines)
+		var full_msg: String = line
+		var file_ref: Dictionary = _extract_file_ref(line)
+
+		# Check next 2 lines for "at:" context and file references
+		for j in range(1, 3):
+			if i + j >= lines.size():
+				break
+			var next_line: String = lines[i + j].strip_edges()
+			if next_line.is_empty():
+				break
+			if next_line.begins_with("at:") or next_line.begins_with("At:"):
+				full_msg += " | " + next_line
+				if file_ref.is_empty():
+					file_ref = _extract_file_ref(next_line)
+			elif "res://" in next_line and file_ref.is_empty():
+				file_ref = _extract_file_ref(next_line)
+
+		errors.append({
+			"message": full_msg,
+			"file": file_ref.get("file", ""),
+			"line": file_ref.get("line", -1),
+		})
+
+	# Deduplicate
+	var seen: Dictionary = {}
+	var unique: Array[Dictionary] = []
+	for err in errors:
+		var key: String = err.get("file", "") + "|" + err.get("message", "").left(120)
+		if not seen.has(key):
+			seen[key] = true
+			unique.append(err)
+
+	# If headless gave us nothing useful, fall back to basic can_instantiate() list
+	if unique.is_empty():
+		return get_errors()
+
+	return unique
+
+
 func _deduplicate():
 	# Remove duplicate errors (same file + same message prefix)
 	var seen: Dictionary = {}
