@@ -70,11 +70,16 @@ func _process(_delta):
 					var data = client.get_utf8_string(client.get_available_bytes())
 					_request_buffers[client] = _request_buffers.get(client, "") + data
 
-					# Check if we have a complete HTTP request (headers end with \r\n\r\n)
+					# Check if we have a complete HTTP request (headers + full body)
 					var buf: String = _request_buffers[client]
-					if "\r\n\r\n" in buf:
-						_handle_request(client, buf)
-						to_remove.append(i)
+					var header_end_pos = buf.find("\r\n\r\n")
+					if header_end_pos >= 0:
+						var content_len = _parse_content_length(buf.substr(0, header_end_pos))
+						var body_start = header_end_pos + 4
+						var body_received = buf.length() - body_start
+						if body_received >= content_len:
+							_handle_request(client, buf)
+							to_remove.append(i)
 
 			StreamPeerTCP.STATUS_NONE, StreamPeerTCP.STATUS_ERROR:
 				to_remove.append(i)
@@ -87,6 +92,13 @@ func _process(_delta):
 		_request_buffers.erase(client)
 		client.disconnect_from_host()
 		_clients.remove_at(idx)
+
+
+func _parse_content_length(headers: String) -> int:
+	for line in headers.split("\r\n"):
+		if line.to_lower().begins_with("content-length:"):
+			return line.substr(15).strip_edges().to_int()
+	return 0
 
 
 func _handle_request(client: StreamPeerTCP, raw: String):
