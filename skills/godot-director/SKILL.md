@@ -275,18 +275,111 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 - The color palette must be chosen deliberately, not random.
 - The file manifest must list EVERY file that will be created.
 
+## GDSCRIPT QUALITY RULES (APPLY TO EVERY PHASE)
+
+These rules apply to EVERY script you write, from Phase 1 onwards. Do NOT leave quality to Phase 5.
+
+### Rule 1: NEVER Hardcode Viewport Dimensions
+```gdscript
+# ❌ WRONG — breaks on any screen size
+draw_rect(Rect2(0, 0, 1280, 720), color)
+var center = Vector2(1280 / 2.0, 720 / 2.0)
+
+# ✅ CORRECT — works on any screen size
+var vp = get_viewport_rect().size
+draw_rect(Rect2(Vector2.ZERO, vp), color)
+var center = vp / 2.0
+```
+
+### Rule 2: NEVER Write Stub Methods
+```gdscript
+# ❌ WRONG — method exists but does nothing. The user gets a silent, broken game.
+func play_sfx(name: String) -> void:
+    pass
+
+# ✅ CORRECT — if you can't implement audio, at least log it
+func play_sfx(name: String) -> void:
+    # TODO: Load actual audio files
+    print("[Audio] %s" % name)
+```
+**If a method can't be implemented yet, either don't create it or make it print a debug message. NEVER write `pass` stubs for gameplay-critical methods.**
+
+### Rule 3: ALWAYS Bounds-Check Array Access
+```gdscript
+# ❌ WRONG — crashes if node_id is invalid
+var node: Dictionary = map_nodes[node_id]
+
+# ✅ CORRECT — safe access with fallback
+if node_id < 0 or node_id >= map_nodes.size():
+    push_warning("Invalid node_id: %d" % node_id)
+    return
+var node: Dictionary = map_nodes[node_id]
+```
+
+### Rule 4: Use Viewport-Relative UI Positioning
+```gdscript
+# ❌ WRONG — UI positioned with magic numbers
+label.position = Vector2(640, 100)
+
+# ✅ CORRECT — use anchors or viewport-relative positioning
+label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+# OR
+var vp = get_viewport_rect().size
+label.position = Vector2(vp.x / 2.0, vp.y * 0.1)
+```
+
+### Rule 5: Generate Assets, Don't Leave Entities Invisible
+```gdscript
+# ❌ WRONG — entity has no visual representation
+var player = CharacterBody2D.new()
+# (nothing else — player is invisible)
+
+# ✅ CORRECT — generate an asset or draw something visible
+# Call godot_generate_asset({name: "player", type: "character", width: 64, height: 64})
+# Then load and use it:
+var sprite = Sprite2D.new()
+sprite.texture = load("res://assets/sprites/player.svg")
+player.add_child(sprite)
+```
+
+### Rule 6: Test After Every 2-3 Scripts
+**Do NOT write all scripts then test at the end.** After writing every 2-3 scripts:
+1. `godot_reload_filesystem()`
+2. `godot_get_errors()`
+3. Fix any errors IMMEDIATELY before writing more scripts
+4. If you write 5+ scripts without testing, you WILL have cascading errors that are hard to fix
+
+### Rule 7: Scene Flow Must Be Defensive
+```gdscript
+# ❌ WRONG — signal connection assumes script is ready
+var scene = Control.new()
+scene.set_script(load("res://scripts/my_scene.gd"))
+scene.some_signal.connect(_handler)  # May fail if signal not yet defined
+
+# ✅ CORRECT — defer signal connection
+var scene = Control.new()
+scene.set_script(load("res://scripts/my_scene.gd"))
+add_child(scene)
+# Connect after the node is in the tree (signals are safe after set_script for class-level signals)
+scene.some_signal.connect(_handler)
+```
+
+---
+
 ## PHASE 1: Foundation (Core Mechanics)
 
 **Goal**: Player exists in a world and can perform their primary action.
 
 ### Steps
 1. Create project structure (`godot-init`)
-2. Write `project.godot` with correct settings and input mappings
+2. Write `project.godot` with correct settings, input mappings, AND platform-specific viewport (see Platform Settings above)
 3. Create minimal main scene (root node + script)
 4. Write player script (movement only, no abilities yet)
 5. Build player node programmatically in main.gd `_ready()`
-6. Add background and camera
-7. **TEST**: `godot_reload` → `godot_run` → `godot_get_errors`
+6. Generate player asset: `godot_generate_asset({name: "player", type: "character", width: 64, height: 64})`
+7. Add background (gradient shader or colored rect that uses `get_viewport_rect()`, NOT hardcoded size)
+8. Add camera
+9. **TEST**: `godot_reload` → `godot_run` → `godot_get_errors` — fix ALL errors before proceeding
 
 ### Quality Gate
 - [ ] Player moves smoothly in all directions
@@ -305,10 +398,11 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 
 ### Steps
 1. Add shooting/jumping/interaction to player script
-2. Create bullet/projectile scene if needed
-3. Add cooldown/timing to prevent spam
-4. Add visual feedback (muzzle flash, jump squash-stretch)
-5. **TEST**: reload → run → verify abilities work
+2. **TEST after writing**: `godot_reload` → `godot_get_errors` → fix errors
+3. Create bullet/projectile scene if needed
+4. Add cooldown/timing to prevent spam
+5. Add visual feedback (muzzle flash, jump squash-stretch)
+6. **TEST full phase**: reload → run → verify abilities work → fix ALL errors
 
 ### Quality Gate
 - [ ] Primary ability works (shoot/jump/interact)
@@ -323,12 +417,14 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 **Goal**: The game has something to overcome.
 
 ### Steps
-1. Create enemy scripts (one type at a time)
-2. Create enemy scenes (.tscn prefabs or programmatic)
-3. Add spawn system to main.gd
-4. Implement collision detection (bullets hit enemies, enemies hit player)
-5. Add health system (player takes damage, enemies die)
-6. Add score tracking
+1. Create first enemy script
+2. **TEST**: `godot_reload` → `godot_get_errors` → fix errors before writing more
+3. Create additional enemy types (one at a time, test each)
+4. Add spawn system to main.gd
+5. **TEST**: reload → run → verify enemies spawn
+6. Implement collision detection (bullets hit enemies, enemies hit player)
+7. Add health system (player takes damage, enemies die)
+8. Add score tracking
 7. Add difficulty ramping (more enemies over time, or harder types)
 8. **TEST**: reload → run → verify combat loop works
 
