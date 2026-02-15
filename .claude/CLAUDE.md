@@ -110,6 +110,18 @@ Example complex game workflow:
 3. Sub-agents write enemy types, UI screens, level logic in parallel
 4. Main agent integrates, runs, and fixes errors
 
+## Stop Hook (Build Guard)
+
+A Stop hook prevents Claude Code from finishing while a game build is in progress.
+
+- **How it works**: The file `.claude/.build_in_progress` acts as a lock. When present, Claude cannot stop.
+- **Set by**: The `godot-director` skill writes this file at Phase 0 and updates it at each phase.
+- **Cleared by**: The `godot-director` skill removes it after Phase 6 (Final QA) passes.
+- **Manual cancel**: If the user wants to abort, remove the file: `rm .claude/.build_in_progress`
+- **No infinite loop**: If the hook fires twice in a row (`stop_hook_active=true`), it allows the stop.
+
+You do NOT need to manage this manually — the Director skill handles it. Just follow the Director protocol.
+
 ## Error Handling
 
 When `godot_get_errors` returns errors:

@@ -275,13 +275,26 @@ Phase 5 (sequential — main agent):
 ## EXECUTION PROTOCOL
 
 When executing, ALWAYS:
-1. Write the PRD first — get user approval before building
-2. Execute one phase at a time
-3. Run `godot_reload` → `godot_run` → `godot_get_errors` after EACH phase
-4. Fix all errors before moving to next phase
-5. Report progress: "Phase X complete. Y/Z quality gates passed."
-6. If a quality gate fails, fix it before proceeding
-7. After Phase 5, report: "Game complete. Here's what was built: [summary]"
+1. **Start build lock**: Write the current phase to `.claude/.build_in_progress` (this prevents Claude Code from stopping mid-build via the Stop hook)
+   ```bash
+   echo "Phase 0: PRD" > .claude/.build_in_progress
+   ```
+2. Write the PRD first — get user approval before building
+3. Execute one phase at a time. Update the build lock at each phase:
+   ```bash
+   echo "Phase N: <name>" > .claude/.build_in_progress
+   ```
+4. Run `godot_reload` → `godot_run` → `godot_get_errors` after EACH phase
+5. Fix all errors before moving to next phase
+6. Report progress: "Phase X complete. Y/Z quality gates passed."
+7. If a quality gate fails, fix it before proceeding
+8. After Phase 6, report: "Game complete. Here's what was built: [summary]"
+9. **Release build lock**: Remove the flag file when the game is fully complete
+   ```bash
+   rm .claude/.build_in_progress
+   ```
+
+**IMPORTANT**: The Stop hook will prevent Claude from finishing while `.claude/.build_in_progress` exists. If the user explicitly asks to cancel, remove the file before stopping.
 
 ## COLOR PALETTES (pre-designed, pick one)
 

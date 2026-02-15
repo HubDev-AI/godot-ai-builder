@@ -41,6 +41,8 @@ if [ -z "$GODOT_PROJECT" ]; then
     echo "  2. Copy the Godot plugin into your project"
     echo "  3. Configure Claude Code MCP settings"
     echo "  4. Copy the CLAUDE.md knowledge base"
+    echo "  5. Install Claude Code skills (14 game generation skills)"
+    echo "  6. Install Stop hook (prevents Claude from quitting mid-build)"
     exit 1
 fi
 
@@ -91,7 +93,25 @@ cp -r "$SCRIPT_DIR/knowledge/"* "$GODOT_PROJECT/knowledge/"
 echo -e "${GREEN}✓${NC} Knowledge base installed"
 
 # ---------------------------------------------------------------------------
-# 6. Configure Claude Code MCP
+# 6. Install Claude Code skills
+# ---------------------------------------------------------------------------
+echo "Installing Claude Code skills..."
+mkdir -p "$GODOT_PROJECT/.claude/skills"
+cp -r "$SCRIPT_DIR/.claude/skills/"* "$GODOT_PROJECT/.claude/skills/"
+SKILL_COUNT=$(ls -d "$GODOT_PROJECT/.claude/skills/"*/ 2>/dev/null | wc -l | tr -d ' ')
+echo -e "${GREEN}✓${NC} $SKILL_COUNT skills installed"
+
+# ---------------------------------------------------------------------------
+# 7. Install Stop hook (prevents quitting mid-build)
+# ---------------------------------------------------------------------------
+echo "Installing Stop hook..."
+mkdir -p "$GODOT_PROJECT/.claude/hooks"
+cp "$SCRIPT_DIR/hooks/stop-guard.sh" "$GODOT_PROJECT/.claude/hooks/stop-guard.sh"
+chmod +x "$GODOT_PROJECT/.claude/hooks/stop-guard.sh"
+echo -e "${GREEN}✓${NC} Stop hook installed"
+
+# ---------------------------------------------------------------------------
+# 8. Configure Claude Code MCP
 # ---------------------------------------------------------------------------
 echo "Configuring Claude Code MCP..."
 MCP_CONFIG_DIR="$HOME/.claude"
@@ -131,14 +151,27 @@ else
         "GODOT_BRIDGE_PORT": "6100"
       }
     }
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"\$CLAUDE_PROJECT_DIR/.claude/hooks/stop-guard.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
 CONFIGEOF
-    echo -e "${GREEN}✓${NC} MCP configured at $CLAUDE_CONFIG"
+    echo -e "${GREEN}✓${NC} MCP + hooks configured at $CLAUDE_CONFIG"
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Done
+# 9. Done
 # ---------------------------------------------------------------------------
 echo ""
 echo "================================================"
@@ -155,4 +188,7 @@ echo "  5. Tell Claude: \"Create a 2D platformer with a player, enemies, and coi
 echo ""
 echo "Claude Code will write the game files, tell Godot to reload,"
 echo "run the scene, check for errors, and fix them automatically."
+echo ""
+echo "The Stop hook ensures Claude won't quit mid-build."
+echo "It automatically disengages when the Director completes all phases."
 echo ""
