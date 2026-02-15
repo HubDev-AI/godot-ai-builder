@@ -175,5 +175,10 @@ func _append_log_line(timestamp: String, msg: String, type: String):
 		"progress":
 			prefix = "✅ "
 	$LogOutput.text += "[%s] %s%s\n" % [timestamp, prefix, msg]
-	await get_tree().process_frame
-	$LogOutput.scroll_vertical = $LogOutput.get_line_count()
+	# Scroll to bottom on next frame so the TextEdit has updated its line count
+	_scroll_to_bottom.call_deferred()
+
+
+func _scroll_to_bottom():
+	if $LogOutput:
+		$LogOutput.scroll_vertical = $LogOutput.get_line_count()
