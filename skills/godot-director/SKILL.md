@@ -342,32 +342,55 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 
 **After gate passes**: `godot_update_phase(4, "UI & Game Flow", "completed", {...gates})` + `godot_save_build_state({...})`
 
-## PHASE 5: Polish & Game Feel (CRITICAL)
+## PHASE 5: Polish & Game Feel (CRITICAL — DO NOT RUSH THIS)
 
-**Goal**: The game FEELS good. This is what separates "playable" from "good".
+**Goal**: The game FEELS good and LOOKS intentional. This is what separates "playable" from "good".
+
+**⛔ If the game currently uses plain shapes (rectangles, circles) with no effects, shaders, or layered visuals — Phase 5 has NOT started yet. You MUST add visual depth before this phase can pass.**
 
 Load the `godot-polish` skill for this phase.
 
-### Steps
-1. Add screen shake on impacts
-2. Add hit flash on damage (white flash 0.1s)
-3. Add death particles/explosions
-4. Add scale punch on score increase
-5. Add bullet trails
-6. Add enemy spawn animation (scale from 0)
-7. Add camera zoom effects (zoom in on boss, zoom out on wave clear)
-8. Tune all timings (spawn rates, cooldowns, speeds)
-9. Add floating damage/score numbers
-10. Generate proper placeholder assets via MCP (`godot_generate_asset`)
-11. **TEST**: play for 60 seconds — does it FEEL good?
+### Step A: Generate Assets (MANDATORY)
+Call `godot_generate_asset` for EVERY game entity that doesn't have a proper visual:
+- Player sprite (`godot_generate_asset({name: "player", type: "character", ...})`)
+- Each enemy type (`godot_generate_asset({name: "enemy_chaser", type: "enemy", ...})`)
+- Projectiles (`godot_generate_asset({name: "bullet", type: "projectile", ...})`)
+- Pickups/items (`godot_generate_asset({name: "health_pickup", type: "item", ...})`)
+- UI icons (`godot_generate_asset({name: "heart_icon", type: "icon", ...})`)
+
+**If you skip this step, the game will look terrible. Do NOT skip it.**
+
+### Step B: Visual Polish
+1. Add layered `_draw()` or shaders to every entity: body + shadow + highlight + outline
+2. Add gradient background shader (not a flat color)
+3. Add vignette overlay
+4. Add screen shake on impacts
+5. Add hit flash on damage (white shader flash 0.1s)
+6. Add death particles/explosions (GPUParticles2D)
+7. Add scale punch tweens on score increase, pickups, hits
+8. Add bullet trails
+9. Add enemy spawn animation (scale from 0 + fade in)
+
+### Step C: UI Polish
+1. Style ALL buttons with custom StyleBoxFlat (background, hover, pressed states)
+2. Style ALL panels with rounded corners, borders, semi-transparent backgrounds
+3. Add hover animations on interactive elements
+4. Add screen transitions (fade to black between scenes)
+
+### Step D: Game Feel
+1. Tune all timings (spawn rates, cooldowns, speeds)
+2. Add floating damage/score numbers
+3. Add camera zoom effects where appropriate
+4. **TEST**: `godot_reload` → `godot_run` → play for 60 seconds — does it FEEL good?
 
 ### Quality Gate
+- [ ] Every entity has a generated asset OR layered procedural visual (NO plain shapes)
+- [ ] Background has visual depth (gradient/shader, not flat color)
 - [ ] Screen shakes on big hits
 - [ ] Enemies don't just disappear — they explode/dissolve
-- [ ] Score pops are visible and satisfying
-- [ ] Player damage has clear feedback (flash + shake + sound cue)
+- [ ] Player damage has clear feedback (flash + shake)
+- [ ] UI buttons are styled (NOT default Godot theme)
 - [ ] Spawning looks smooth (not sudden pop-in)
-- [ ] UI elements animate (not static)
 - [ ] Color palette is consistent and intentional
 - [ ] Game is fun for at least 60 seconds
 
@@ -375,24 +398,43 @@ Load the `godot-polish` skill for this phase.
 
 ## PHASE 6: Final QA & Delivery
 
+**⛔ YOU CANNOT DECLARE THE BUILD COMPLETE IF `godot_get_errors` RETURNS ANY ERRORS.**
+
 ### Steps
-1. Play through the complete game 3 times
-2. Check for edge cases (no enemies left, health below 0, score overflow)
-3. Verify all transitions work
-4. Check for memory leaks (nodes accumulating)
-5. Run `godot_get_errors` — must return zero errors
-6. Write final status to user
+1. Run `godot_get_errors` — note all errors
+2. **Fix EVERY error**: Read the file, understand the error, fix it, reload, check again
+3. Repeat steps 1-2 until `godot_get_errors` returns **zero errors**
+4. If you are stuck on an error after 3 attempts, rewrite the problematic script from scratch
+5. Play through the complete game 3 times
+6. Check for edge cases (no enemies left, health below 0, score overflow)
+7. Verify all transitions work
+8. Check for memory leaks (nodes accumulating)
+9. Write final status to user
+
+### Error Fix Loop (MANDATORY)
+```
+loop:
+  errors = godot_get_errors()
+  if errors.length == 0: break
+  for each error:
+    read the file
+    fix the error
+    godot_reload_filesystem()
+  goto loop (max 10 iterations)
+```
+**If after 10 iterations there are still errors, rewrite the failing scripts from scratch using a simpler approach, then re-run the loop.**
 
 ### Final Quality Checklist
-- [ ] Zero errors on `godot_get_errors`
+- [ ] **ZERO errors** on `godot_get_errors` (THIS IS NON-NEGOTIABLE)
 - [ ] Full game loop: menu → play → game over → retry
 - [ ] Player has at least 2 abilities
 - [ ] At least 2 enemy types
 - [ ] Progressive difficulty
 - [ ] HUD with score + health
-- [ ] Visual polish (particles, shake, flash)
+- [ ] Visual polish (particles, shake, flash) — NOT plain shapes
 - [ ] Consistent color palette
 - [ ] No nodes leaking (check with print(get_tree().get_node_count()) periodically)
+- [ ] All entities have assets or procedural visuals (NOT default white/colored rectangles)
 
 ## SUB-AGENT STRATEGY
 
@@ -429,6 +471,12 @@ Every sub-agent MUST:
 Without `godot_log`, the Godot dock shows NOTHING while agents work. This makes the user think nothing is happening. Call it 3-5 times per file write minimum.
 
 ## EXECUTION PROTOCOL
+
+**⛔ HARD RULES — NEVER VIOLATE THESE:**
+- **NEVER declare the build "complete" or "done" if `godot_get_errors` returns ANY errors.** Fix them ALL first.
+- **NEVER skip Phase 5 (Polish).** If the game has plain shapes and no effects, Phase 5 has not passed.
+- **NEVER skip asset generation.** Call `godot_generate_asset` for every entity.
+- **NEVER move to the next phase if the current phase has unfixed errors.**
 
 When executing, ALWAYS:
 1. **Check for resumption**: Call `godot_get_build_state()`. If found, follow SESSION RESUMPTION flow above.

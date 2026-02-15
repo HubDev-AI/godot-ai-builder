@@ -195,12 +195,14 @@ A Stop hook prevents Claude from finishing while a game build is in progress.
 - The file `.claude/.build_in_progress` acts as a lock. The Director sets it at Phase 0 and removes it at Phase 6.
 - Manual cancel: `rm .claude/.build_in_progress`
 
-### Error Handling
+### Error Handling (ZERO TOLERANCE)
 When `godot_get_errors` returns errors:
 1. Read the error message and file path
 2. Read the problematic file, fix the issue
-3. Call `godot_reload_filesystem` → `godot_run_scene` again
-4. Repeat until clean
+3. Call `godot_reload_filesystem` → `godot_get_errors` again
+4. **Repeat until ZERO errors.** Do not give up. Do not declare "done" with errors remaining.
+5. If stuck after 3 attempts on the same error: rewrite the script from scratch using simpler code
+6. **NEVER finish a build with errors.** This is non-negotiable.
 
 ### Knowledge Base
 Detailed references are in the plugin's `knowledge/` directory:
