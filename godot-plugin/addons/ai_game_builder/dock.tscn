@@ -111,21 +111,6 @@ wrap_mode = 1
 text = "Clear Log"
 tooltip_text = "Clear all log messages"
 
-[node name="Sep5" type="HSeparator" parent="."]
-
-[node name="QualityGatesSection" type="VBoxContainer" parent="."]
-
-[node name="GatesTitle" type="Label" parent="QualityGatesSection"]
-text = "Quality Gates"
-tooltip_text = "Checklist of conditions that must pass before moving to the next build phase"
-theme_override_font_sizes/font_size = 18
-
-[node name="GatesScroll" type="ScrollContainer" parent="QualityGatesSection"]
-custom_minimum_size = Vector2(0, 80)
-
-[node name="GatesList" type="VBoxContainer" parent="QualityGatesSection/GatesScroll"]
-size_flags_horizontal = 3
-
 [node name="ErrorPollTimer" type="Timer" parent="."]
 wait_time = 2.0
 autostart = true

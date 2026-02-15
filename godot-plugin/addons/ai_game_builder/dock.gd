@@ -1,7 +1,7 @@
 @tool
 extends VBoxContainer
 ## Enhanced dock panel for the AI Game Builder plugin.
-## Shows phase progress, control buttons, error badges, filtered logs, and quality gates.
+## Shows phase progress, control buttons, error badges, and filtered logs.
 
 var editor_plugin: EditorPlugin
 var http_bridge: Node  # http_bridge.gd
@@ -64,25 +64,10 @@ func _on_phase_updated(phase_data: Dictionary):
 	_sync_phase_display(phase_data)
 
 
-func _update_quality_gates(gates: Dictionary):
-	var gates_list = $QualityGatesSection/GatesScroll/GatesList
-	for child in gates_list.get_children():
-		child.queue_free()
-
-	for gate_name in gates:
-		var cb = CheckBox.new()
-		cb.text = gate_name.replace("_", " ").capitalize()
-		cb.button_pressed = gates[gate_name]
-		cb.disabled = true
-		gates_list.add_child(cb)
-
-
 func _sync_phase_display(phase_data: Dictionary):
 	var phase_num: int = phase_data.get("phase_number", 0)
 	var phase_name: String = phase_data.get("phase_name", "")
 	var status: String = phase_data.get("status", "")
-	var gates: Dictionary = phase_data.get("quality_gates", {})
-
 	# Only update if something actually changed
 	var current_label = $PhaseSection/PhaseLabel.text
 	var expected_label = "Phase %d: %s" % [phase_num, phase_name]
@@ -107,10 +92,6 @@ func _sync_phase_display(phase_data: Dictionary):
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
 		_:
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-
-	# Update quality gates
-	_update_quality_gates(gates)
-
 
 func _on_run_pressed():
 	if http_bridge:
