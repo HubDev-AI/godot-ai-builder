@@ -94,6 +94,67 @@ At the START of every build session, check for an interrupted build:
    - If fresh: delete `.claude/build_state.json` and `.claude/.build_in_progress`, proceed normally
 3. If no checkpoint: proceed normally
 
+## MULTI-SESSION BUILD PROTOCOL
+
+Complex games cannot be built in one session. The distiller skill (`godot-distiller`) produces
+a `SESSION_PLAN.md` that breaks the game into multiple sessions. Each session adds one layer.
+
+### Session Scope Rules
+
+| Session | Focus | Max New Scripts | Max New Screens |
+|---------|-------|-----------------|-----------------|
+| 1 | Core loop only — player + one screen + basic mechanics | 8 | 1 |
+| 2 | Depth — more entities, basic progression | 5 | 1 |
+| 3 | Flow — remaining screens, transitions, full game loop | 5 | 2 |
+| 4 | Polish — effects, particles, audio, visual depth | 2 (mostly edits) | 0 |
+| 5+ | Features — shop, progression, social, one system per session | 5 | 1 |
+
+### Session Execution Flow
+
+Each session follows this protocol:
+
+```
+1. Check godot_get_build_state()
+   → If previous session data exists: read it, list what was built
+   → If SESSION_PLAN.md exists: read it, identify THIS session's scope
+
+2. Read SESSION_PLAN.md to determine:
+   - What session number is this? (based on what's already built)
+   - What features are in scope for THIS session?
+   - What assets are needed?
+
+3. Generate/update PRD scoped to THIS session only
+   - Include ONLY features for this session
+   - Reference existing scripts (don't rebuild what works)
+   - Add "Existing Infrastructure" section listing what Session N-1 built
+
+4. Execute Phases 1-6 for THIS session's scope
+   - Phase 1: Build ONLY new scripts needed for this session
+   - Phase 6: Verify BOTH new AND existing features still work
+
+5. Save build state with session metadata:
+   godot_save_build_state({
+     session_number: N,
+     session_name: "Core Loop",
+     completed_sessions: [1, 2, ...],
+     files_written: [...all files across all sessions...],
+     next_session: N+1,
+     next_session_scope: "brief description from SESSION_PLAN.md"
+   })
+
+6. Tell the user:
+   "Session [N] complete. [summary of what was built]
+    Next session: [N+1] — [scope from SESSION_PLAN.md]
+    Start a new Claude session and I'll continue from here."
+```
+
+### Cross-Session Rules
+- **NEVER modify files from previous sessions** unless fixing a bug
+- **ALWAYS verify previous features still work** after adding new code
+- **ALWAYS read build_state.json** at session start to know what exists
+- **If a previous session's feature is broken**: fix it BEFORE building new features
+- **Each session produces a WORKING game** — not a broken prototype
+
 ## PHASE 0: Discovery & PRD
 
 ### Mode A: User provides a prompt (no documents)
@@ -275,6 +336,36 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 - The color palette must be chosen deliberately, not random.
 - The file manifest must list EVERY file that will be created.
 
+## ⛔ INCREMENTAL BUILD PROTOCOL (APPLIES TO ALL PHASES) ⛔
+
+**This is the #1 rule for preventing cascading errors. Violating this WILL break the build.**
+
+```
+MANDATORY EXECUTION PATTERN (every phase, no exceptions):
+
+1. Write script A
+2. godot_reload_filesystem() + godot_get_errors()
+3. If errors in A: fix them NOW before writing anything else
+4. Write script B
+5. godot_reload_filesystem() + godot_get_errors()
+6. If errors in A or B: fix them NOW
+7. Repeat for each subsequent script
+
+⛔ NEVER write more than 2 scripts without running godot_get_errors()
+⛔ If you write 3+ scripts without testing, you WILL get cascading errors
+⛔ Cascading errors are 10x harder to fix than individual errors
+```
+
+**Why this matters**: When script A has an error (e.g., wrong autoload name), and scripts B, C, D
+all reference it, you get 4 errors instead of 1. If you wrote all 4 scripts before testing, you
+can't tell which is the ROOT error and which are cascading. Testing after every 1-2 scripts
+catches errors when they're isolated and easy to fix.
+
+**Sub-agents must also follow this protocol.** If a sub-agent writes 3 scripts without testing,
+it has violated the protocol.
+
+---
+
 ## GDSCRIPT QUALITY RULES (APPLY TO EVERY PHASE)
 
 These rules apply to EVERY script you write, from Phase 1 onwards. Do NOT leave quality to Phase 5.
@@ -366,6 +457,50 @@ scene.some_signal.connect(_handler)
 
 ---
 
+## PHASE 0.5: Asset Discovery (MANDATORY before writing scripts)
+
+**Goal**: Find all existing art assets and map them to game entities BEFORE any code is written.
+
+### Steps
+1. **Scan the docs folder** for art assets:
+   ```
+   Glob: <docs-folder>/**/*.png, **/*.jpg, **/*.svg, **/*.webp
+   ```
+2. **Scan the project** for existing assets:
+   ```
+   Glob: res://assets/**/*.png, res://assets/**/*.svg, res://assets/**/*.jpg
+   ```
+3. **If assets found in docs folder**: Copy them to `res://assets/sprites/`
+   ```bash
+   mkdir -p assets/sprites
+   cp <docs-folder>/assets/*.png assets/sprites/
+   ```
+4. **Build an asset manifest**: Map each asset file to a game entity:
+   ```
+   bank.png      → Bank building (city map scene)
+   player.png    → Player character
+   guard.png     → Guard enemy
+   laser_tile.png → Puzzle tile
+   ```
+5. **Log the manifest**:
+   ```
+   godot_log("Asset Discovery: Found [N] assets")
+   godot_log("  bank.png → Bank building")
+   godot_log("  player.png → Player character")
+   godot_log("  [...]")
+   ```
+6. **Flag entities without assets**: List game entities from the PRD that have no matching asset.
+   These will use procedural visuals or `godot_generate_asset`.
+7. **Write the asset map** to the PRD (Section 7 or appendix) so all subsequent phases can reference it.
+
+### Asset Usage Rules (ENFORCED in all subsequent phases)
+- **If an asset exists for an entity**: Script MUST use `Sprite2D` + `load("res://assets/sprites/X.png")`
+- **If NO asset exists**: Script MUST call `godot_generate_asset()` OR use layered `_draw()` procedural visuals
+- **NEVER use bare `draw_circle()` or `draw_rect()` as the primary visual for ANY entity**
+- **NEVER leave an entity invisible** (no visual = broken game)
+
+---
+
 ## PHASE 1: Foundation (Core Mechanics)
 
 **Goal**: Player exists in a world and can perform their primary action.
@@ -373,10 +508,12 @@ scene.some_signal.connect(_handler)
 ### Steps
 1. Create project structure (`godot-init`)
 2. Write `project.godot` with correct settings, input mappings, AND platform-specific viewport (see Platform Settings above)
-3. Create minimal main scene (root node + script)
-4. Write player script (movement only, no abilities yet)
-5. Build player node programmatically in main.gd `_ready()`
-6. Generate player asset: `godot_generate_asset({name: "player", type: "character", width: 64, height: 64})`
+3. **Check the asset manifest from Phase 0.5** — know which entities have sprites
+4. Create minimal main scene (root node + script)
+5. Write player script (movement only, no abilities yet)
+   - **If player asset exists**: Use `Sprite2D` + `load("res://assets/sprites/player.png")`
+   - **If no player asset**: Generate one with `godot_generate_asset` or use layered `_draw()`
+6. Build player node programmatically in main.gd `_ready()`
 7. Add background (gradient shader or colored rect that uses `get_viewport_rect()`, NOT hardcoded size)
 8. Add camera
 9. **TEST**: `godot_reload` → `godot_run` → `godot_get_errors` — fix ALL errors before proceeding
@@ -530,9 +667,9 @@ Before using ANY Godot class for the first time in a phase, call `godot_get_clas
 **⛔ YOU CANNOT DECLARE THE BUILD COMPLETE IF `godot_get_errors` RETURNS ANY ERRORS.**
 
 ### Steps
-1. Run `godot_get_errors` — note all errors
-2. **Fix EVERY error**: Read the file, understand the error, fix it, reload, check again
-3. Repeat steps 1-2 until `godot_get_errors` returns **zero errors**
+1. Run `godot_get_errors()` — now returns **detailed messages with file paths and line numbers**
+2. **Fix EVERY error surgically** (see Error Fix Protocol below)
+3. Repeat until `godot_get_errors` returns **zero errors**
 4. If you are stuck on an error after 3 attempts, rewrite the problematic script from scratch
 5. Play through the complete game 3 times
 6. Check for edge cases (no enemies left, health below 0, score overflow)
@@ -540,17 +677,43 @@ Before using ANY Godot class for the first time in a phase, call `godot_get_clas
 8. Check for memory leaks (nodes accumulating)
 9. Write final status to user
 
-### Error Fix Loop (MANDATORY)
+### Error Fix Loop (MANDATORY — uses detailed errors)
 ```
 loop:
+  errors = godot_get_errors()   // Returns: [{message, file, line}, ...]
+  if errors.length == 0: break
+
+  // Step 1: Identify ROOT errors (autoloads/base classes first)
+  // If multiple scripts show the same missing identifier, find the source
+  root_errors = errors where file is an autoload or base class
+  other_errors = errors - root_errors
+
+  // Step 2: Fix root errors FIRST (cascading errors will disappear)
+  for each error in root_errors:
+    Read ONLY lines (error.line - 5) to (error.line + 5) from error.file
+    The error.message tells you EXACTLY what's wrong
+    Fix the specific line
+    godot_reload_filesystem()
+
+  // Step 3: Re-check — many errors should be gone now
   errors = godot_get_errors()
   if errors.length == 0: break
-  for each error:
-    read the file
-    fix the error
+
+  // Step 4: Fix remaining errors individually
+  for each error in errors:
+    Read ONLY lines around error.line (not the whole file!)
+    Fix the specific issue
     godot_reload_filesystem()
+
   goto loop (max 10 iterations)
 ```
+
+**Key principles:**
+- **Fix autoload/base class errors FIRST** — they cause cascading failures in all dependent scripts
+- **Read only the lines around the error** — don't read the whole file to fix a typo on line 42
+- **The error.message is specific** — "Identifier 'GameManager' not found" means check autoload registration
+- **Don't rewrite whole files** unless the error is truly architectural (wrong base class, wrong pattern)
+
 **If after 10 iterations there are still errors, rewrite the failing scripts from scratch using a simpler approach, then re-run the loop.**
 
 ### Final Quality Checklist

@@ -380,6 +380,104 @@ func _create_hud_panel(pos: Vector2, size: Vector2) -> PanelContainer:
     return panel
 ```
 
+## Entity Visual Setup Pattern (MANDATORY for all entities)
+
+Every game entity MUST use this pattern to ensure it is never invisible and always uses
+existing assets when available. This is the FIRST thing to call when creating any entity.
+
+```gdscript
+## Call this for EVERY game entity in _ready() or when constructing nodes.
+## It checks for user-provided sprites first, then falls back to procedural visuals.
+## An entity should NEVER be left without a visual.
+
+func _setup_entity_visual(node: Node2D, entity_name: String, size: Vector2, fallback_color: Color) -> void:
+    # Priority 1: Check for user-provided PNG/JPG sprite
+    var png_path = "res://assets/sprites/" + entity_name + ".png"
+    var jpg_path = "res://assets/sprites/" + entity_name + ".jpg"
+
+    if ResourceLoader.exists(png_path):
+        var sprite = Sprite2D.new()
+        sprite.texture = load(png_path)
+        # Scale to desired size
+        var tex_size = sprite.texture.get_size()
+        sprite.scale = size / tex_size
+        node.add_child(sprite)
+        return
+
+    if ResourceLoader.exists(jpg_path):
+        var sprite = Sprite2D.new()
+        sprite.texture = load(jpg_path)
+        var tex_size = sprite.texture.get_size()
+        sprite.scale = size / tex_size
+        node.add_child(sprite)
+        return
+
+    # Priority 2: Check for generated SVG asset
+    var svg_path = "res://assets/sprites/" + entity_name + ".svg"
+    if ResourceLoader.exists(svg_path):
+        var sprite = Sprite2D.new()
+        sprite.texture = load(svg_path)
+        node.add_child(sprite)
+        return
+
+    # Priority 3: Procedural visual (layered — NOT a flat shape)
+    # This is the fallback. It MUST have visual depth.
+    _draw_procedural_entity(node, size, fallback_color)
+
+
+func _draw_procedural_entity(node: Node2D, size: Vector2, color: Color) -> void:
+    # Create a dedicated drawing node for layered visuals
+    var visual = Node2D.new()
+    visual.name = "Visual"
+    visual.set_script(_create_procedural_script(size, color))
+    node.add_child(visual)
+
+
+## Returns a GDScript string for procedural visuals (use with set_script or save to file)
+## This ensures every procedural entity has: shadow + body gradient + highlight + outline + pulse
+static func get_procedural_template(size: float, color: Color) -> String:
+    return """extends Node2D
+
+var body_color := Color(%f, %f, %f)
+var outline_color := Color(%f, %f, %f)
+var size := %f
+var _time := 0.0
+
+func _process(delta):
+    _time += delta
+    queue_redraw()
+
+func _draw():
+    # Drop shadow
+    draw_circle(Vector2(1, 2), size, Color(0, 0, 0, 0.3))
+    # Body with gradient
+    draw_circle(Vector2.ZERO, size, body_color.darkened(0.15))
+    draw_circle(Vector2(0, -1), size * 0.9, body_color)
+    # Inner highlight
+    draw_circle(Vector2(-size * 0.2, -size * 0.25), size * 0.45, body_color.lightened(0.3))
+    # Outline
+    draw_arc(Vector2.ZERO, size, 0, TAU, 32, outline_color, 1.5, true)
+    # Pulse glow
+    var glow_alpha = 0.1 + sin(_time * 2.0) * 0.05
+    draw_circle(Vector2.ZERO, size * 1.3, Color(body_color.r, body_color.g, body_color.b, glow_alpha))
+""" % [color.r, color.g, color.b,
+       color.darkened(0.4).r, color.darkened(0.4).g, color.darkened(0.4).b,
+       size.x / 2.0]
+```
+
+### When to use this pattern
+- **Building a city map with building entities?** → `_setup_entity_visual(building_node, "bank", Vector2(64, 64), Color.BLUE)`
+- **Creating enemies?** → `_setup_entity_visual(enemy_node, "guard", Vector2(48, 48), Color.RED)`
+- **Player character?** → `_setup_entity_visual(player_node, "player", Vector2(64, 64), Color.CYAN)`
+
+The pattern guarantees:
+1. User-provided art is ALWAYS used when it exists (no more "drew dots instead of buildings")
+2. Generated SVGs are used as second priority
+3. Procedural fallback is NEVER a flat shape — always layered with depth
+4. An entity is NEVER invisible
+
+---
+
 ## External Art Pipeline
 
 ### AI Art Prompt Template

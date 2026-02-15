@@ -213,6 +213,32 @@ assets/
   audio/         # .ogg, .wav
 ```
 
+### Rule 8: ALWAYS Check for Existing Assets Before Drawing
+Before writing ANY entity script:
+1. Check if `res://assets/sprites/` has a matching image (use `Glob` or `godot_scan_project_files`)
+2. If yes: use `Sprite2D` with `load("res://assets/sprites/entity_name.png")`
+3. If no: call `godot_generate_asset()` to create an SVG, OR use layered `_draw()` procedural visuals
+4. **NEVER use bare `draw_circle()` or `draw_rect()` as the primary visual**
+5. **NEVER leave an entity invisible** — every entity MUST have a visible representation
+
+```gdscript
+# ✅ CORRECT — check for sprite, fall back to procedural
+func _setup_visual(node: Node2D, entity_name: String, fallback_color: Color):
+    var sprite_path = "res://assets/sprites/" + entity_name + ".png"
+    if ResourceLoader.exists(sprite_path):
+        var sprite = Sprite2D.new()
+        sprite.texture = load(sprite_path)
+        node.add_child(sprite)
+    else:
+        # Use layered procedural visuals (body + shadow + highlight + outline)
+        # OR call godot_generate_asset() first
+        pass  # implement procedural fallback
+
+# ❌ WRONG — drawing a circle and calling it a building
+func _draw():
+    draw_circle(Vector2.ZERO, 20, Color.BLUE)  # This is NOT acceptable
+```
+
 ### Visual Quality (CRITICAL — games must look good)
 - **NEVER use plain ColorRect as a game entity**. Every entity needs: body + shadow + highlight + outline + idle animation.
 - Use layered `_draw()` with gradients, shadows, highlights, and outlines for procedural visuals
@@ -295,12 +321,21 @@ If the user chose **Simple game**, skip the Director entirely. Build directly:
 3. Reload → Run → Fix errors
 4. Done. No PRD, no phases, no polish pass.
 
-### 0c. Build From Documents → Use Director (Mode B)
+### 0c. Build From Documents → Distill First, Then Director (Mode B)
 If the user provides a **folder or files** with game design documents ("use this folder",
 "here are my docs", "build from this GDD", "take these files and build the game"):
-1. Load `godot-director`
-2. The Director reads all documents, extracts the game spec, generates a PRD
-3. Then proceeds through phases 1-6 as normal
+
+1. **Check complexity**: Count documents, screens, features, entity types
+2. **If complex** (3+ screens, 5+ entity types, 15+ features, multiple docs):
+   - Load `godot-distiller` FIRST
+   - Distiller reads all docs, identifies core loop, scopes into sessions
+   - Distiller writes `docs/SESSION_PLAN.md`
+   - Wait for user approval of session plan
+   - Then load `godot-director` with `SESSION_PLAN.md` as the source
+   - Director builds ONLY Session 1 scope
+3. **If simple** (1-2 screens, few features, single doc):
+   - Load `godot-director` directly (Mode B as before)
+   - Director reads documents, generates PRD, proceeds through phases 1-6
 
 ### 1. Understand the Request
 Parse the user's prompt to determine:
@@ -372,6 +407,7 @@ After writing all files:
 ### Core Foundation
 | Skill | When to Use |
 |-------|-------------|
+| `godot-distiller` | **Complex docs → scoped session plan.** Use BEFORE director when docs have 3+ screens or 15+ features |
 | `godot-init` | Bootstrapping project, folder structure, project.godot settings |
 | `godot-gdscript` | GDScript syntax, patterns, idioms, common mistakes |
 | `godot-scene-arch` | Scene building (programmatic vs .tscn), node hierarchies |
@@ -394,6 +430,7 @@ After writing all files:
 
 ## Keyword Routing
 
+- **"distill"**, **"scope"**, **"session plan"**, **"too complex"** → `godot-distiller`
 - **"shooter"**, **"gun"**, **"bullet"** → `godot-templates` (shooter) + `godot-player` + `godot-enemies`
 - **"platformer"**, **"jump"**, **"gravity"** → `godot-templates` (platformer) + `godot-player`
 - **"puzzle"**, **"match"**, **"grid"**, **"tile"** → `godot-templates` (puzzle) + `godot-scene-arch`

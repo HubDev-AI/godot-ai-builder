@@ -108,17 +108,70 @@ Call BEFORE and AFTER every file write, every test, every error fix. Sub-agents 
 
 ## Error Resolution Patterns
 
+### Using Detailed Errors (PREFERRED)
+
+`godot_get_errors()` now returns **detailed error messages** with file paths, line numbers, and
+actual error text via headless Godot validation. Always use these details to fix errors precisely.
+
+**Error Fix Protocol:**
+```
+1. errors = godot_get_errors()      // Returns detailed messages with file + line
+2. For each error:
+   a. Read ONLY the specific lines around error.line (not the whole file)
+   b. The error.message tells you EXACTLY what's wrong
+   c. Fix the specific issue on that line
+   d. Do NOT rewrite the whole file unless the error is architectural
+3. godot_reload_filesystem()
+4. errors = godot_get_errors()      // Verify fix
+5. Repeat until zero errors
+```
+
+**Key principle**: Fix errors surgically. Read 5-10 lines around the error, not the whole file.
+Rewriting a whole file to fix one typo is wasteful and introduces new bugs.
+
+### Common GDScript Errors and Fixes
+
+| Error Message | Cause | Fix |
+|---|---|---|
+| `Identifier "X" not found in base` | Missing autoload, wrong class name, or typo | Check autoload registration in project.godot, verify class_name spelling |
+| `Invalid operands "X" and "Y"` | Type mismatch (int vs float, String vs int) | Cast types explicitly: `float(x)`, `str(x)`, `int(x)` |
+| `Parser Error: Expected "X"` | Syntax error — missing colon, bracket, paren | Check line for missing `:` after if/for/func, unmatched brackets |
+| `Cannot load source code from "X"` | File path wrong or file doesn't exist | Verify the .gd file exists at that path, check for typos in path |
+| `Cyclic reference in "X"` | Two scripts import each other | Remove circular dependency — use signals or a shared autoload instead |
+| `Could not find type "X" in base "Y"` | Using a class that hasn't been loaded or doesn't exist | Add `class_name` to the target script, or use `load()` to get the class |
+| `Function "X" not found in base "Y"` | Calling a method that doesn't exist on that type | Call `godot_get_class_info("Y")` to check correct method names |
+| `Too few arguments for "X"` | Missing required parameters in method call | Call `godot_get_class_info` to check correct method signature |
+| `Signal "X" not found` | Connecting to a signal that doesn't exist | Check signal name spelling, verify the signal is declared in the class |
+| `Cannot use "X" as a function` | Using a property as a function or vice versa | Check if `X` is a property (access without `()`) or method (call with `()`) |
+| `Unexpected "Identifier" in class body` | Code outside of a function at the class level | Move the code inside a function (`_ready()`, `_process()`, etc.) |
+| `The default value is incompatible with type` | Default parameter type doesn't match declaration | Fix the type annotation or the default value |
+
+### Cascading Error Pattern
+
+When an **autoload** or **base class** has an error, ALL scripts that reference it will also
+show errors. This is the most common source of "10 scripts all broken" situations.
+
+**How to identify**: Multiple scripts show the same error about a missing identifier that
+matches an autoload name (e.g., `GameManager`, `AudioManager`).
+
+**Fix protocol**:
+1. Find the ROOT script (the autoload or base class with the actual error)
+2. Fix ONLY that script
+3. `godot_reload_filesystem()` + `godot_get_errors()`
+4. Most cascading errors will disappear
+5. Fix any remaining errors individually
+
 ### "Cannot preload resource"
 **Cause**: Script uses `preload()` for a file that doesn't exist yet.
 **Fix**: Replace `preload()` with `load()` in the script.
 
 ### "Invalid call to function 'X' in base 'Y'"
 **Cause**: Calling a method that doesn't exist on that node type.
-**Fix**: Check the node type. Common mistake: calling physics methods on wrong body type.
+**Fix**: Check the node type. Call `godot_get_class_info("Y")` to get correct API. Common mistake: calling physics methods on wrong body type.
 
 ### "Identifier 'X' not declared in current scope"
 **Cause**: Using a variable/function that doesn't exist.
-**Fix**: Check spelling, check if it's defined in the right scope, check imports.
+**Fix**: Check spelling, check if it's defined in the right scope, check imports. If X is an autoload, verify it's in project.godot [autoload] section.
 
 ### Scene parse errors
 **Cause**: Malformed .tscn file.
@@ -127,7 +180,7 @@ Call BEFORE and AFTER every file write, every test, every error fix. Sub-agents 
 
 ### "Node not found: 'X'"
 **Cause**: `$NodeName` references a node that doesn't exist in the tree.
-**Fix**: Either the node isn't created yet (use `@onready` or build in `_ready()`), or it has a different name.
+**Fix**: Either the node isn't created yet (use `@onready` or build in `_ready()`), or it has a different name. Call `godot_get_scene_tree()` to verify actual node names.
 
 ### Collision not working
 **Cause**: Layer/mask mismatch.
