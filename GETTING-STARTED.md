@@ -26,9 +26,9 @@ claude --version     # Should show the Claude Code version
 
 ## Step 1: Get the AI Game Builder
 
-### Option A: Clone from GitHub (when available)
+### Option A: Clone from GitHub
 ```bash
-git clone https://github.com/your-username/godot-ai-builder.git ~/ai-game-builder
+git clone https://github.com/HubDev-AI/godot-ai-builder.git ~/ai-game-builder
 ```
 
 ### Option B: Use a local copy
@@ -237,7 +237,7 @@ You can always extend later: "Add enemies", "Add a menu", "Make it look better".
 Claude follows the **Game Director** protocol — a 6-phase build process:
 
 #### Phase 0: PRD (Product Requirements Document)
-Claude writes a detailed game design doc and asks for your approval before writing any code.
+Claude writes a detailed game design doc and asks for your approval before writing any code. It also asks about your preferred **visual tier**: procedural (shaders + gradients + glow — default), custom art, AI-generated art, or prototype shapes.
 
 #### Phase 1: Foundation
 Creates the project structure, player movement, camera, and background. Runs the game to verify it works.
@@ -252,7 +252,7 @@ Creates enemy types, spawn systems, collision, health, scoring, and difficulty r
 Builds the main menu, HUD, game over screen, pause menu, and screen transitions. Wires up the full game loop: menu → play → die → retry.
 
 #### Phase 5: Polish
-Adds game "juice" — screen shake, hit flash, death particles, spawn animations, floating score numbers, smooth camera, and visual effects.
+Adds game "juice" — shader-based effects (hit flash, dissolve death, glow outlines), screen shake, death particles, spawn animations, floating score numbers, multi-layer backgrounds (gradient shader + grid + ambient particles + vignette), styled UI buttons, and smooth scene transitions.
 
 #### Phase 6: Final QA
 Runs the game multiple times, checks for errors, edge cases, and memory leaks. Reports the final status.
@@ -299,11 +299,15 @@ my-first-game/
 ├── scripts/              # All game logic
 │   ├── main.gd           # Game loop, spawning, score
 │   ├── player.gd         # Player controller
+│   ├── player_visual.gd  # Layered procedural player art
 │   ├── enemy.gd          # Enemy AI
 │   ├── bullet.gd         # Projectile logic
+│   ├── enemies/          # Enemy types + visual scripts
+│   ├── effects/          # Grid background, particles
 │   └── ui/               # HUD, menus, game over
+├── shaders/              # GLSL shaders (glow, dissolve, hit flash, gradient)
 ├── scenes/               # Scene files
-├── assets/               # Generated sprites
+├── assets/               # Generated sprites (SVG with gradients/shadows)
 ├── docs/PRD.md           # The game design document
 ├── addons/               # Godot editor bridge plugin
 └── knowledge/            # Reference docs

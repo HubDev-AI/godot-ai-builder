@@ -27,7 +27,7 @@ Claude Code is the brain. The plugin gives it 14 specialized game development sk
 claude --plugin-dir /path/to/godot-ai-builder
 
 # Option B — Install from marketplace
-/plugin marketplace add https://github.com/you/godot-ai-builder
+/plugin marketplace add https://github.com/HubDev-AI/godot-ai-builder
 /plugin install godot-ai-builder
 ```
 
@@ -60,6 +60,8 @@ Make a shooter game
 
 Claude will ask whether you want a **full game** (6-phase build with PRD, enemies, UI, polish) or a **simple game** (minimal, fast, playable). Give a detailed prompt to skip the question and go straight to building.
 
+For full games, Claude also asks about your preferred **visual tier**: procedural (shaders, gradients, glow effects — default), custom art (you provide sprites), AI-generated art (generates prompts for DALL-E/Midjourney), or prototype (basic shapes).
+
 ## Plugin Contents
 
 ### 14 Skills
@@ -77,7 +79,7 @@ Claude will ask whether you want a **full game** (6-phase build with PRD, enemie
 | `godot-physics` | Collision layers, physics bodies, Area2D triggers |
 | `godot-ui` | UI screens, HUD, menus, transitions |
 | `godot-effects` | Audio, particles, tweens, visual effects |
-| `godot-assets` | SVG/PNG asset generation, procedural visuals |
+| `godot-assets` | Visual quality system: procedural visuals, shaders, art pipelines |
 | `godot-ops` | MCP tool operations: run, stop, errors, reload |
 | `godot-templates` | Genre-specific templates with file manifests |
 
@@ -109,7 +111,7 @@ When you ask for a complete game, the Director runs a 6-phase build:
 3. **Phase 2: Abilities** — Shooting, jumping, interactions
 4. **Phase 3: Enemies** — AI, spawning, combat, scoring
 5. **Phase 4: UI** — Menu, HUD, game over, pause, transitions
-6. **Phase 5: Polish** — Screen shake, particles, animations, game feel
+6. **Phase 5: Polish** — Shader effects, particles, screen shake, multi-layer backgrounds, styled UI
 7. **Phase 6: QA** — Error checking, edge cases, final verification
 
 Each phase has quality gates. Claude won't proceed until they pass.

@@ -27,6 +27,27 @@ ask the user before generating a PRD:
 ## PHASE 0: Discovery & PRD
 
 ### Mode A: User provides a prompt (no documents)
+
+**Before writing the PRD, ask the user about visual quality:**
+
+> How should this game look?
+>
+> **A) I have art assets** — I'll provide sprites, images, or a folder of assets. Tell me what you need.
+>
+> **B) Generate polished visuals** — Use shaders, gradients, glow effects, layered procedural art, and particles. No real art but should look intentional and stylish (think Geometry Wars, Downwell, or Thomas Was Alone).
+>
+> **C) Use AI-generated art** — I'll use DALL-E / Midjourney / Stable Diffusion to create sprites. You generate the prompts, I'll add the images.
+>
+> **D) Quick prototype** — Colored shapes are fine, I just want to test the gameplay.
+
+Based on the user's choice, set the `visual_tier` in the PRD:
+- **A → "custom"**: Ask user for asset list, set up import pipeline, use Sprite2D + AnimatedSprite2D
+- **B → "procedural"**: Use shaders, `_draw()` with layered effects, glow, outlines, gradient backgrounds, particle systems. THIS IS THE DEFAULT for full game builds.
+- **C → "ai-art"**: Generate detailed art prompts for each asset, set up proper sprite pipeline, ask user to provide generated images
+- **D → "prototype"**: Basic shapes. Only for simple/quick builds.
+
+**For full game builds, default to "procedural" (B) unless the user picks otherwise.**
+
 Generate a complete PRD from scratch. Write it to `docs/PRD.md` in the project.
 
 ### Mode B: User provides a folder/files with game design documents
@@ -120,6 +141,7 @@ For EACH enemy type:
 - **Transitions**: [fade, slide, or cut between screens]
 
 ## 7. Visual Style
+- **Visual tier**: [custom / procedural / ai-art / prototype]
 - **Color palette**: [5-6 hex colors]
   - Background: #______
   - Player: #______
@@ -127,9 +149,27 @@ For EACH enemy type:
   - Enemy secondary: #______
   - Projectiles: #______
   - UI accent: #______
-- **Art style**: [pixel art / clean geometric / glow-neon / organic]
-- **Effects**: [particles, trails, screen shake, flash]
+- **Art style**: [pixel art / clean geometric / glow-neon / organic / cyberpunk / retro]
+- **Effects**: [particles, trails, screen shake, flash, glow, outlines]
+- **Shaders**: [outline, glow, gradient background, dissolve death, CRT filter]
 - **Camera zoom**: [how close/far]
+
+### If visual_tier = "procedural" (default for full builds):
+Every entity MUST have visual depth — not flat colored shapes. Use:
+- **Layered _draw()**: body + shadow + highlight + outline
+- **Shaders**: glow, outline, gradient, dissolve effects
+- **Particles**: ambient particles, trail effects, impact effects
+- **Post-processing**: vignette, subtle bloom, color grading
+Example: A "player" is not a blue rectangle. It's a rounded shape with a soft glow, inner highlight, drop shadow, and an outline that pulses when shooting.
+
+### If visual_tier = "ai-art":
+For each asset needed, generate a detailed prompt:
+```
+Asset: player_ship.png (64x64, transparent background)
+Prompt: "Top-down pixel art spaceship, blue and white, glowing engine, clean lines, game sprite, transparent background, 64x64 pixels"
+Style: 2D game sprite, pixel art / hand-painted / vector
+```
+List ALL asset prompts in the PRD. The user generates them externally and drops them into assets/sprites/.
 
 ## 8. Audio
 - **SFX needed**:

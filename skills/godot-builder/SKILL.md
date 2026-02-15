@@ -99,10 +99,16 @@ assets/
   audio/         # .ogg, .wav
 ```
 
-### Assets
-- For prototyping: use ColorRect, Polygon2D, or `_draw()` — no art needed
-- Use `godot_generate_asset` MCP tool for SVG placeholder sprites
-- Godot imports SVG natively as Texture2D
+### Visual Quality (CRITICAL — games must look good)
+- **NEVER use plain ColorRect as a game entity**. Every entity needs: body + shadow + highlight + outline + idle animation.
+- Use layered `_draw()` with gradients, shadows, highlights, and outlines for procedural visuals
+- Use shaders for glow, outlines, hit flash, dissolve effects, gradient backgrounds
+- Backgrounds must have 2+ layers: gradient shader + grid/particles + vignette
+- UI must be styled: custom StyleBoxFlat on buttons/panels, hover animations, proper fonts
+- Default Godot theme buttons are NOT acceptable for full game builds
+- Load `godot-assets` skill for visual patterns, shader library, and entity templates
+- During PRD (Phase 0), ask the user about visual tier: custom art / procedural / AI-art / prototype
+- For full game builds, default to "procedural" tier (shaders + layered art + particles)
 
 ### Stop Hook (Build Guard)
 A Stop hook prevents Claude from finishing while a game build is in progress.
