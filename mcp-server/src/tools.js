@@ -1,0 +1,355 @@
+/**
+ * MCP Tool definitions and handlers for Godot AI Game Builder.
+ */
+import { readdir, readFile, stat } from "fs/promises";
+import { resolve, extname, relative } from "path";
+import * as bridge from "./godot-bridge.js";
+import { parseScene, resToAbsolute } from "./scene-parser.js";
+import { generatePlaceholder, generatePng } from "./asset-generator.js";
+
+const PROJECT_PATH = process.env.GODOT_PROJECT_PATH || ".";
+
+// ---------------------------------------------------------------------------
+// Tool definitions (MCP schema)
+// ---------------------------------------------------------------------------
+export const TOOL_DEFINITIONS = [
+  {
+    name: "godot_get_project_state",
+    description:
+      "Get the current Godot project state: project name, scenes, scripts, resources, settings, and whether the editor is connected. Always call this first to understand the project before generating code.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "godot_run_scene",
+    description:
+      "Run a scene in the Godot editor. If scene_path is omitted, runs the main scene. Requires the Godot editor to be open with the AI Game Builder plugin enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene_path: {
+          type: "string",
+          description:
+            'Optional res:// path to a specific scene. Runs main scene if empty.',
+        },
+      },
+    },
+  },
+  {
+    name: "godot_stop_scene",
+    description: "Stop the currently running scene in the Godot editor.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "godot_get_errors",
+    description:
+      "Get current errors and warnings from the Godot editor: script parse errors, scene load errors, and runtime errors. Use this after running a scene to check for problems.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "godot_reload_filesystem",
+    description:
+      "Tell the Godot editor to rescan the filesystem. Call this after writing or modifying files so the editor picks up changes.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "godot_parse_scene",
+    description:
+      "Parse a .tscn scene file and return its node tree, scripts, and resources. Useful for understanding existing scene structure before modifying it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene_path: {
+          type: "string",
+          description: "Path to the .tscn file (res:// or absolute)",
+        },
+      },
+      required: ["scene_path"],
+    },
+  },
+  {
+    name: "godot_generate_asset",
+    description:
+      "Generate a placeholder sprite asset (SVG or PNG) for prototyping. Produces simple colored shapes appropriate for the asset type. Godot imports SVGs natively.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Asset filename (no extension)" },
+        width: { type: "number", description: "Width in pixels (default: 32)" },
+        height: {
+          type: "number",
+          description: "Height in pixels (default: 32)",
+        },
+        type: {
+          type: "string",
+          enum: [
+            "character",
+            "enemy",
+            "projectile",
+            "tile",
+            "icon",
+            "background",
+            "npc",
+            "item",
+            "ui",
+          ],
+          description: "Asset type — determines shape and default color",
+        },
+        color: {
+          type: "string",
+          description: "Primary hex color (auto-picked if omitted)",
+        },
+        format: {
+          type: "string",
+          enum: ["svg", "png"],
+          description: "Output format (default: svg)",
+        },
+        output_dir: {
+          type: "string",
+          description: "Output directory (default: res://assets/sprites)",
+        },
+      },
+      required: ["name", "type"],
+    },
+  },
+  {
+    name: "godot_scan_project_files",
+    description:
+      "Scan the project directory for all game files (scripts, scenes, resources, assets). Works without the Godot editor running — reads the filesystem directly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        extensions: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            'File extensions to include (default: ["gd","tscn","tres","svg","png","ogg","wav"])',
+        },
+      },
+    },
+  },
+  {
+    name: "godot_read_project_setting",
+    description:
+      "Read a value from the Godot project.godot file. Common keys: application/config/name, application/run/main_scene, display/window/size/viewport_width",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: {
+          type: "string",
+          description: "Setting key path, e.g. application/run/main_scene",
+        },
+      },
+      required: ["key"],
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Tool dispatcher
+// ---------------------------------------------------------------------------
+export async function handleToolCall(name, args) {
+  switch (name) {
+    case "godot_get_project_state":
+      return await toolGetProjectState();
+    case "godot_run_scene":
+      return await toolRunScene(args.scene_path || "");
+    case "godot_stop_scene":
+      return await toolStopScene();
+    case "godot_get_errors":
+      return await toolGetErrors();
+    case "godot_reload_filesystem":
+      return await toolReloadFilesystem();
+    case "godot_parse_scene":
+      return await toolParseScene(args.scene_path);
+    case "godot_generate_asset":
+      return await toolGenerateAsset(args);
+    case "godot_scan_project_files":
+      return await toolScanProjectFiles(args.extensions);
+    case "godot_read_project_setting":
+      return await toolReadProjectSetting(args.key);
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tool implementations
+// ---------------------------------------------------------------------------
+
+async function toolGetProjectState() {
+  const connected = await bridge.isConnected();
+  const files = await scanDir(PROJECT_PATH, [
+    "gd",
+    "tscn",
+    "tres",
+    "svg",
+    "png",
+  ]);
+  const projectSettings = await readProjectGodot();
+
+  const result = {
+    editor_connected: connected,
+    project_path: resolve(PROJECT_PATH),
+    project_name: projectSettings["application/config/name"] || "Unknown",
+    main_scene: projectSettings["application/run/main_scene"] || "",
+    files: {
+      scripts: files.filter((f) => f.endsWith(".gd")),
+      scenes: files.filter((f) => f.endsWith(".tscn")),
+      resources: files.filter((f) => f.endsWith(".tres")),
+      assets: files.filter(
+        (f) =>
+          f.endsWith(".svg") || f.endsWith(".png") || f.endsWith(".jpg")
+      ),
+    },
+  };
+
+  if (connected) {
+    try {
+      const status = await bridge.getStatus();
+      result.editor_status = status;
+    } catch {
+      /* editor data unavailable */
+    }
+  }
+
+  return result;
+}
+
+async function toolRunScene(scenePath) {
+  return await bridge.runScene(scenePath);
+}
+
+async function toolStopScene() {
+  return await bridge.stopScene();
+}
+
+async function toolGetErrors() {
+  return await bridge.getErrors();
+}
+
+async function toolReloadFilesystem() {
+  return await bridge.reloadFilesystem();
+}
+
+async function toolParseScene(scenePath) {
+  return await parseScene(scenePath);
+}
+
+async function toolGenerateAsset(args) {
+  if (args.format === "png") {
+    return await generatePng(args);
+  }
+  return await generatePlaceholder(args);
+}
+
+async function toolScanProjectFiles(extensions) {
+  const exts = extensions || [
+    "gd",
+    "tscn",
+    "tres",
+    "svg",
+    "png",
+    "ogg",
+    "wav",
+  ];
+  const files = await scanDir(PROJECT_PATH, exts);
+  return {
+    project_path: resolve(PROJECT_PATH),
+    total: files.length,
+    files,
+  };
+}
+
+async function toolReadProjectSetting(key) {
+  const settings = await readProjectGodot();
+  const value = settings[key];
+  if (value === undefined) {
+    return { key, found: false, value: null };
+  }
+  return { key, found: true, value };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function scanDir(dir, extensions, results = []) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const entry of entries) {
+    const full = resolve(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      // Skip hidden dirs, .godot cache, addons
+      if (
+        entry.name.startsWith(".") ||
+        entry.name === "addons" ||
+        entry.name === ".godot"
+      )
+        continue;
+      await scanDir(full, extensions, results);
+    } else {
+      const ext = extname(entry.name).slice(1);
+      if (extensions.includes(ext)) {
+        results.push("res://" + relative(PROJECT_PATH, full));
+      }
+    }
+  }
+
+  return results;
+}
+
+async function readProjectGodot() {
+  const path = resolve(PROJECT_PATH, "project.godot");
+  let content;
+  try {
+    content = await readFile(path, "utf-8");
+  } catch {
+    return {};
+  }
+
+  const settings = {};
+  let currentSection = "";
+
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(";")) continue;
+
+    const sectionMatch = trimmed.match(/^\[(.+?)\]$/);
+    if (sectionMatch) {
+      currentSection = sectionMatch[1];
+      continue;
+    }
+
+    const kvMatch = trimmed.match(/^(\w[\w/]*)=(.+)$/);
+    if (kvMatch) {
+      const fullKey = currentSection
+        ? `${currentSection}/${kvMatch[1]}`
+        : kvMatch[1];
+      let value = kvMatch[2].trim();
+      // Strip quotes
+      if (value.startsWith('"') && value.endsWith('"'))
+        value = value.slice(1, -1);
+      settings[fullKey] = value;
+    }
+  }
+
+  return settings;
+}

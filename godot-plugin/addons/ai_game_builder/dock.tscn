@@ -1,0 +1,36 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/ai_game_builder/dock.gd" id="1"]
+
+[node name="AIGameBuilder" type="VBoxContainer"]
+custom_minimum_size = Vector2(320, 0)
+script = ExtResource("1")
+
+[node name="Title" type="Label" parent="."]
+horizontal_alignment = 1
+text = "AI Game Builder"
+theme_override_font_sizes/font_size = 18
+
+[node name="Sep1" type="HSeparator" parent="."]
+
+[node name="StatusRow" type="HBoxContainer" parent="."]
+
+[node name="StatusIcon" type="Label" parent="StatusRow"]
+text = "●"
+theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1.0)
+
+[node name="StatusText" type="Label" parent="StatusRow"]
+text = "Bridge: starting..."
+size_flags_horizontal = 3
+
+[node name="Sep2" type="HSeparator" parent="."]
+
+[node name="LogOutput" type="TextEdit" parent="."]
+custom_minimum_size = Vector2(0, 250)
+size_flags_vertical = 3
+editable = false
+placeholder_text = "Bridge activity log..."
+wrap_mode = 1
+
+[node name="ClearBtn" type="Button" parent="."]
+text = "Clear Log"

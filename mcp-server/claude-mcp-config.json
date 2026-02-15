@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this into your Claude Code project settings (.claude/settings.json) or user settings (~/.claude/settings.json). Update the paths to match your system.",
+  "mcpServers": {
+    "godot-ai-builder": {
+      "command": "node",
+      "args": ["/FULL/PATH/TO/godot-ai-builder/mcp-server/index.js"],
+      "env": {
+        "GODOT_PROJECT_PATH": "/FULL/PATH/TO/your-godot-project",
+        "GODOT_BRIDGE_PORT": "6100"
+      }
+    }
+  }
+}

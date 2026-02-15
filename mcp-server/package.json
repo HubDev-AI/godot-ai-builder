@@ -1,0 +1,21 @@
+{
+  "name": "godot-ai-builder-mcp",
+  "version": "0.1.0",
+  "description": "MCP server bridging Claude Code to the Godot 4 editor for AI game generation",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "godot-ai-builder-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "sharp": "^0.33.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
