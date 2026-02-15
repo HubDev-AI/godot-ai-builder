@@ -143,7 +143,9 @@ specialized skills based on intent. When adding a new skill:
   - `POST /stop` → stop running scene
   - `POST /reload` → rescan filesystem
   - `POST /log` → send message to dock panel
-- `dock.gd` displays a scrollable log. Connected to bridge via signal `log_message(msg)`
+  - `POST /phase` → update phase state, emit phase_updated signal
+  - `GET /phase` → return current phase state
+- `dock.gd` displays phase progress bar, control buttons (Run/Stop/Reload), error badges, filtered log, and quality gates checklist. Connected to bridge via signals `bridge_log(msg)` and `phase_updated(data)`
 - `error_collector.gd` uses two strategies: active script validation + Godot log scanning
 - `project_scanner.gd` walks the filesystem for /state responses
 
@@ -322,6 +324,52 @@ The Director also manages:
 - Visual tier selection (procedural/custom/AI-art/prototype)
 - Sub-agent delegation for parallel file writing
 - PRD template and approval flow
+
+## Checkpoint System
+
+Structured build state saved to `.claude/build_state.json` after each phase completion.
+
+**MCP Tools:**
+- `godot_save_build_state` — writes JSON checkpoint (direct filesystem, no bridge)
+- `godot_get_build_state` — reads JSON checkpoint, handles missing file gracefully
+- `godot_update_phase` — sends phase progress to Godot dock via bridge `POST /phase`
+
+**Data Model** (`.claude/build_state.json`):
+```json
+{
+  "version": "1.0",
+  "build_id": "unique-id",
+  "timestamp": "ISO-8601",
+  "game_name": "...",
+  "genre": "...",
+  "visual_tier": "procedural",
+  "current_phase": { "number": 0, "name": "...", "status": "...", "started_at": "..." },
+  "completed_phases": [{ "number": 0, "name": "...", "completed_at": "...", "quality_gates": {} }],
+  "files_written": ["scripts/player.gd"],
+  "error_history": [{ "file": "...", "message": "...", "resolution": "...", "resolved": true }],
+  "test_runs": [{ "phase": 0, "errors": 0, "success": true }],
+  "prd_path": "docs/PRD.md",
+  "next_steps": ["..."]
+}
+```
+
+**Resume Flow:**
+1. Director calls `godot_get_build_state()` at session start
+2. If found: show summary, ask user to continue or start fresh
+3. If continue: validate files exist, re-run quality gates for completed phases, resume from current_phase
+4. If fresh: delete checkpoint and build lock
+5. After Phase 6: delete both `.claude/build_state.json` and `.claude/.build_in_progress`
+
+## Enhanced Dock
+
+The dock (`dock.gd` + `dock.tscn`) provides:
+- **Phase progress bar** (0-6) with colored status labels (green=completed, yellow=in_progress)
+- **Control buttons**: Run (▶), Stop (■), Reload (↻) — call bridge handlers directly, no HTTP round-trip
+- **Error badges**: poll `error_collector` every 2s, show red/green error count + yellow warning count
+- **Log filtering**: All / Errors / Progress tabs — message type detected from content keywords
+- **Quality gates checklist**: dynamic CheckBox nodes populated from `phase_updated` signal data
+
+**Signal flow**: Director → `godot_update_phase` tool → bridge `POST /phase` → `http_bridge.phase_updated` signal → `dock._on_phase_updated()`
 
 ## Cross-Cutting Patterns
 

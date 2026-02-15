@@ -28,6 +28,18 @@ Available MCP tools:
 - `godot_scan_project_files` — List all project files
 - `godot_read_project_setting` — Read project.godot values
 - `godot_log` — **Send a message to the Godot dock panel** (call CONSTANTLY for user visibility)
+- `godot_save_build_state` — **Save build checkpoint** (phase progress, files written, quality gates)
+- `godot_get_build_state` — **Load build checkpoint** (check for interrupted builds at session start)
+- `godot_update_phase` — **Update dock phase progress** (phase number, name, status, quality gates)
+
+## BUILD RESUMPTION
+
+At the START of every session, before analyzing the user's request:
+
+1. Call `godot_get_build_state()` to check for interrupted builds
+2. If checkpoint found AND user wants the same game: route to `godot-director` for resumption
+3. If checkpoint found BUT user wants a different game: warn about existing build, offer to delete old checkpoint, then proceed normally
+4. If no checkpoint: proceed normally
 
 If MCP tools fail or aren't available, tell the user: "MCP tools not loaded. Start Claude Code with: `claude --plugin-dir /path/to/godot-ai-builder`"
 
@@ -130,6 +142,13 @@ Detailed references are in the plugin's `knowledge/` directory:
 - `asset-pipeline.md` — Asset creation and import
 
 ## Execution Flow
+
+### -1. Check for Interrupted Builds
+
+Before anything else, call `godot_get_build_state()`. If a checkpoint exists:
+- Tell the user what was found (game name, last phase, files count)
+- If user wants to continue: route to `godot-director` which handles resumption
+- If user wants something different: delete the checkpoint and continue with normal flow
 
 ### 0. Scope Detection — Simple vs. Full Game (CRITICAL)
 

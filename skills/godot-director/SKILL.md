@@ -24,6 +24,18 @@ ask the user before generating a PRD:
 
 > This will be a full game build with PRD, 6 phases, enemies, UI, and polish. Is that what you want, or would you prefer a simpler, minimal version?
 
+## SESSION RESUMPTION
+
+At the START of every build session, check for an interrupted build:
+
+1. Call `godot_get_build_state()` first
+2. If checkpoint found:
+   - Show user: "Found interrupted build: **[game_name]** — last completed Phase [N]: [name]. [files_written count] files written."
+   - Ask: "**Continue this build?** Or **start fresh?**"
+   - If continue: validate key files still exist on disk, resume from `current_phase`
+   - If fresh: delete `.claude/build_state.json` and `.claude/.build_in_progress`, proceed normally
+3. If no checkpoint: proceed normally
+
 ## PHASE 0: Discovery & PRD
 
 ### Mode A: User provides a prompt (no documents)
@@ -224,6 +236,8 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 
 **DO NOT proceed to Phase 2 until Phase 1 passes.**
 
+**After gate passes**: `godot_update_phase(1, "Foundation", "completed", {...gates})` + `godot_save_build_state({...})`
+
 ## PHASE 2: Player Abilities
 
 **Goal**: Player can do their primary and secondary actions.
@@ -240,6 +254,8 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 - [ ] Visual feedback on every action
 - [ ] Cooldowns feel right (not too fast, not too slow)
 - [ ] No orphaned nodes (bullets clean up after 3s)
+
+**After gate passes**: `godot_update_phase(2, "Player Abilities", "completed", {...gates})` + `godot_save_build_state({...})`
 
 ## PHASE 3: Enemies & Challenges
 
@@ -263,6 +279,8 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 - [ ] Difficulty increases over time
 - [ ] Dead enemies have death effect (not just disappearing)
 
+**After gate passes**: `godot_update_phase(3, "Enemies & Challenges", "completed", {...gates})` + `godot_save_build_state({...})`
+
 ## PHASE 4: UI & Game Flow
 
 **Goal**: Complete game flow from menu → play → game over → retry.
@@ -284,6 +302,8 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 - [ ] Back to menu works
 - [ ] Pause works (ESC)
 - [ ] Transitions are smooth (not jarring cuts)
+
+**After gate passes**: `godot_update_phase(4, "UI & Game Flow", "completed", {...gates})` + `godot_save_build_state({...})`
 
 ## PHASE 5: Polish & Game Feel (CRITICAL)
 
@@ -313,6 +333,8 @@ Load the `godot-polish` skill for this phase.
 - [ ] UI elements animate (not static)
 - [ ] Color palette is consistent and intentional
 - [ ] Game is fun for at least 60 seconds
+
+**After gate passes**: `godot_update_phase(5, "Polish & Game Feel", "completed", {...gates})` + `godot_save_build_state({...})`
 
 ## PHASE 6: Final QA & Delivery
 
@@ -372,23 +394,37 @@ Without `godot_log`, the Godot dock shows NOTHING while agents work. This makes 
 ## EXECUTION PROTOCOL
 
 When executing, ALWAYS:
-1. **Start build lock**: Write the current phase to `.claude/.build_in_progress` (this prevents Claude Code from stopping mid-build via the Stop hook)
+1. **Check for resumption**: Call `godot_get_build_state()`. If found, follow SESSION RESUMPTION flow above.
+2. **Start build lock**: Write the current phase to `.claude/.build_in_progress`
    ```bash
    echo "Phase 0: PRD" > .claude/.build_in_progress
    ```
-2. Write the PRD first — get user approval before building
-3. Execute one phase at a time. Update the build lock at each phase:
+3. **Initialize checkpoint**: After PRD approval, save the initial build state:
+   ```
+   godot_save_build_state({version: "1.0", build_id: "...", game_name: "...", ...})
+   ```
+4. Execute one phase at a time. At each phase START:
+   ```
+   godot_update_phase(N, "Phase Name", "in_progress", {})
+   ```
+   Update the build lock:
    ```bash
    echo "Phase N: <name>" > .claude/.build_in_progress
    ```
-4. **Use MCP tools** — call `godot_reload_filesystem` → `godot_run_scene` → `godot_get_errors` after EACH phase. NEVER use raw curl.
-5. Fix all errors before moving to next phase
-6. Report progress: "Phase X complete. Y/Z quality gates passed."
-7. If a quality gate fails, fix it before proceeding
-8. After Phase 6, report: "Game complete. Here's what was built: [summary]"
-9. **Release build lock**: Remove the flag file when the game is fully complete
+5. **Use MCP tools** — call `godot_reload_filesystem` → `godot_run_scene` → `godot_get_errors` after EACH phase. NEVER use raw curl.
+6. Fix all errors before moving to next phase
+7. At each phase END (after quality gate passes):
+   ```
+   godot_update_phase(N, "Phase Name", "completed", {gate1: true, gate2: true, ...})
+   godot_save_build_state({...updated state with completed_phases, files_written, etc...})
+   ```
+8. Report progress: "Phase X complete. Y/Z quality gates passed."
+9. If a quality gate fails, fix it before proceeding
+10. After Phase 6, report: "Game complete. Here's what was built: [summary]"
+11. **Clean up**: Remove both checkpoint and build lock:
    ```bash
    rm .claude/.build_in_progress
+   rm .claude/build_state.json
    ```
 
 ## PROGRESS REPORTING (MANDATORY — TERMINAL + GODOT DOCK)

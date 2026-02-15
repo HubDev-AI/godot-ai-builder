@@ -73,6 +73,15 @@ export async function sendLog(message) {
   }
 }
 
+export async function updatePhase(phaseNumber, phaseName, status, qualityGates) {
+  return bridgeRequest("POST", "/phase", {
+    phase_number: phaseNumber,
+    phase_name: phaseName,
+    status,
+    quality_gates: qualityGates,
+  });
+}
+
 export async function isConnected() {
   try {
     await getStatus();

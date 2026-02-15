@@ -12,8 +12,10 @@ var _clients: Array[StreamPeerTCP] = []
 var _request_buffers: Dictionary = {}  # StreamPeerTCP -> String
 var _error_collector: RefCounted
 var _project_scanner: RefCounted
+var _phase_state: Dictionary = {}
 
 signal bridge_log(message: String)
+signal phase_updated(phase_data: Dictionary)
 
 
 func _ready():
@@ -126,6 +128,10 @@ func _route(method: String, path: String, body: Dictionary) -> Dictionary:
 			return {"code": 200, "data": _handle_reload()}
 		["POST", "/log"]:
 			return {"code": 200, "data": _handle_log(body)}
+		["POST", "/phase"]:
+			return {"code": 200, "data": _handle_update_phase(body)}
+		["GET", "/phase"]:
+			return {"code": 200, "data": _handle_get_phase()}
 		_:
 			return {"code": 404, "data": {"error": "not found", "path": path}}
 
@@ -184,6 +190,17 @@ func _handle_log(body: Dictionary) -> Dictionary:
 	if not message.is_empty():
 		bridge_log.emit(message)
 	return {"ok": true}
+
+
+func _handle_update_phase(body: Dictionary) -> Dictionary:
+	_phase_state = body
+	phase_updated.emit(body)
+	bridge_log.emit("Phase %d: %s — %s" % [body.get("phase_number", 0), body.get("phase_name", ""), body.get("status", "")])
+	return {"ok": true}
+
+
+func _handle_get_phase() -> Dictionary:
+	return _phase_state
 
 
 func _send_response(client: StreamPeerTCP, code: int, data: Dictionary):

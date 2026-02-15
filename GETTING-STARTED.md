@@ -282,6 +282,12 @@ While Claude is working, you'll see activity in two places:
 - Ask for changes ("make the enemies faster", "change the color palette")
 - Claude will adjust and continue
 
+**If your session is interrupted** (rate limit, crash, or you close the terminal):
+1. Don't worry — your build progress is saved automatically after each phase
+2. Restart Claude Code: `claude --plugin-dir ~/ai-game-builder`
+3. Claude will detect the saved checkpoint and offer to resume
+4. Choose "Continue" to pick up where you left off
+
 ---
 
 ## After the Build
@@ -342,9 +348,11 @@ The skills instruct Claude to report progress. If it's not doing so:
 - If you haven't created a project yet, do Step 2 first
 
 ### Claude stops unexpectedly
-- If Claude hits a rate limit, wait a moment and type "continue" — it will resume
+- **Build progress is saved automatically** — each phase completion creates a checkpoint
+- Restart Claude: `claude --plugin-dir ~/ai-game-builder`
+- Claude will detect the checkpoint and offer to resume from where it left off
 - If the build lock is stuck, manually remove it: `rm .claude/.build_in_progress`
-- Re-run Claude with `claude --plugin-dir ~/ai-game-builder` and tell it to continue
+- To clear a stale checkpoint: `rm .claude/build_state.json`
 
 ### Game has errors after build
 - Open Claude Code and say: "Fix the errors in my game"
@@ -370,6 +378,7 @@ The skills instruct Claude to report progress. If it's not doing so:
 | Cancel mid-build | `rm .claude/.build_in_progress` then Claude can stop |
 | Run the game | Press F5 in Godot, or Claude runs it automatically |
 | See game errors | Claude checks automatically, or say "Get errors" |
+| Resume interrupted build | Restart Claude — it auto-detects the checkpoint |
 
 ---
 

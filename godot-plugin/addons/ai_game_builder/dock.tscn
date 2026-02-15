@@ -25,12 +25,98 @@ size_flags_horizontal = 3
 
 [node name="Sep2" type="HSeparator" parent="."]
 
+[node name="PhaseSection" type="VBoxContainer" parent="."]
+
+[node name="PhaseLabel" type="Label" parent="PhaseSection"]
+text = "Phase: Idle"
+
+[node name="PhaseProgress" type="ProgressBar" parent="PhaseSection"]
+custom_minimum_size = Vector2(0, 20)
+max_value = 6.0
+step = 1.0
+show_percentage = false
+
+[node name="PhaseStatusLabel" type="Label" parent="PhaseSection"]
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
+
+[node name="Sep3" type="HSeparator" parent="."]
+
+[node name="ControlButtons" type="HBoxContainer" parent="."]
+
+[node name="RunBtn" type="Button" parent="ControlButtons"]
+text = "▶ Run"
+size_flags_horizontal = 3
+
+[node name="StopBtn" type="Button" parent="ControlButtons"]
+disabled = true
+text = "■ Stop"
+size_flags_horizontal = 3
+
+[node name="ReloadBtn" type="Button" parent="ControlButtons"]
+text = "↻ Reload"
+size_flags_horizontal = 3
+
+[node name="ErrorSection" type="HBoxContainer" parent="."]
+
+[node name="ErrorLabel" type="Label" parent="ErrorSection"]
+text = "Errors: "
+
+[node name="ErrorBadge" type="Label" parent="ErrorSection"]
+text = "0"
+theme_override_colors/font_color = Color(0.3, 0.9, 0.3, 1.0)
+
+[node name="WarnSpacer" type="Label" parent="ErrorSection"]
+text = "   Warnings: "
+
+[node name="WarnBadge" type="Label" parent="ErrorSection"]
+text = "0"
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
+
+[node name="Sep4" type="HSeparator" parent="."]
+
+[node name="LogFilterRow" type="HBoxContainer" parent="."]
+
+[node name="FilterAll" type="Button" parent="LogFilterRow"]
+toggle_mode = true
+button_pressed = true
+text = "All"
+size_flags_horizontal = 3
+
+[node name="FilterErrors" type="Button" parent="LogFilterRow"]
+toggle_mode = true
+text = "Errors"
+size_flags_horizontal = 3
+
+[node name="FilterProgress" type="Button" parent="LogFilterRow"]
+toggle_mode = true
+text = "Progress"
+size_flags_horizontal = 3
+
 [node name="LogOutput" type="TextEdit" parent="."]
-custom_minimum_size = Vector2(0, 250)
+custom_minimum_size = Vector2(0, 200)
 size_flags_vertical = 3
 editable = false
-placeholder_text = "Bridge activity log..."
+placeholder_text = "Build activity log..."
 wrap_mode = 1
 
 [node name="ClearBtn" type="Button" parent="."]
 text = "Clear Log"
+
+[node name="Sep5" type="HSeparator" parent="."]
+
+[node name="QualityGatesSection" type="VBoxContainer" parent="."]
+
+[node name="GatesTitle" type="Label" parent="QualityGatesSection"]
+text = "Quality Gates"
+theme_override_font_sizes/font_size = 14
+
+[node name="GatesScroll" type="ScrollContainer" parent="QualityGatesSection"]
+custom_minimum_size = Vector2(0, 80)
+
+[node name="GatesList" type="VBoxContainer" parent="QualityGatesSection/GatesScroll"]
+size_flags_horizontal = 3
+
+[node name="ErrorPollTimer" type="Timer" parent="."]
+wait_time = 2.0
+autostart = true

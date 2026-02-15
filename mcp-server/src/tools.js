@@ -1,7 +1,7 @@
 /**
  * MCP Tool definitions and handlers for Godot AI Game Builder.
  */
-import { readdir, readFile, stat } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir, stat } from "fs/promises";
 import { resolve, extname, relative } from "path";
 import * as bridge from "./godot-bridge.js";
 import { parseScene, resToAbsolute } from "./scene-parser.js";
@@ -170,6 +170,58 @@ export const TOOL_DEFINITIONS = [
       required: ["message"],
     },
   },
+  {
+    name: "godot_save_build_state",
+    description:
+      "Save the current build state to a checkpoint file (.claude/build_state.json). Call this after each phase completes to enable session resumption if Claude is interrupted. The state object should include: version, build_id, timestamp, game_name, genre, visual_tier, current_phase, completed_phases, files_written, error_history, test_runs, prd_path, next_steps.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        state: {
+          type: "object",
+          description: "The complete build state object to save",
+        },
+      },
+      required: ["state"],
+    },
+  },
+  {
+    name: "godot_get_build_state",
+    description:
+      "Read the build checkpoint file (.claude/build_state.json) to check for interrupted builds. Call this at the start of every build session. Returns {found: true, state: {...}} if a checkpoint exists, or {found: false, state: null} if no checkpoint exists.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "godot_update_phase",
+    description:
+      "Update the Godot dock panel with the current build phase progress. Call this at the start and end of each build phase so the user can see progress in the editor. Also updates quality gate checkboxes in the dock.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        phase_number: {
+          type: "number",
+          description: "Phase number (0-6)",
+        },
+        phase_name: {
+          type: "string",
+          description: "Phase name (e.g. 'Foundation', 'Enemies & Challenges')",
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed"],
+          description: "Phase status",
+        },
+        quality_gates: {
+          type: "object",
+          description: "Quality gate results — keys are gate names, values are booleans",
+        },
+      },
+      required: ["phase_number", "phase_name", "status"],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -197,6 +249,12 @@ export async function handleToolCall(name, args) {
       return await toolReadProjectSetting(args.key);
     case "godot_log":
       return await toolLog(args.message);
+    case "godot_save_build_state":
+      return await toolSaveBuildState(args.state);
+    case "godot_get_build_state":
+      return await toolGetBuildState();
+    case "godot_update_phase":
+      return await toolUpdatePhase(args.phase_number, args.phase_name, args.status, args.quality_gates || {});
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -324,6 +382,49 @@ async function toolReadProjectSetting(key) {
 async function toolLog(message) {
   await bridge.sendLog(message);
   return { ok: true, message };
+}
+
+async function toolSaveBuildState(state) {
+  const dir = resolve(PROJECT_PATH, ".claude");
+  const filePath = resolve(dir, "build_state.json");
+  await bridge.sendLog("[MCP] Saving build checkpoint...");
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(filePath, JSON.stringify(state, null, 2), "utf-8");
+    await bridge.sendLog("[MCP] Build checkpoint saved");
+    return { ok: true, path: filePath };
+  } catch (err) {
+    await bridge.sendLog(`[MCP] Failed to save checkpoint: ${err.message}`);
+    throw new Error(`Failed to save build state: ${err.message}`);
+  }
+}
+
+async function toolGetBuildState() {
+  const filePath = resolve(PROJECT_PATH, ".claude", "build_state.json");
+  await bridge.sendLog("[MCP] Checking for build checkpoint...");
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const state = JSON.parse(content);
+    await bridge.sendLog(`[MCP] Found checkpoint: ${state.game_name || "unknown"} — Phase ${state.current_phase?.number ?? "?"}`);
+    return { found: true, state };
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      await bridge.sendLog("[MCP] No build checkpoint found");
+      return { found: false, state: null };
+    }
+    await bridge.sendLog(`[MCP] Checkpoint file corrupted: ${err.message}`);
+    return { found: false, state: null, error: err.message };
+  }
+}
+
+async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
+  await bridge.sendLog(`[MCP] Phase ${phaseNumber}: ${phaseName} — ${status}`);
+  try {
+    await bridge.updatePhase(phaseNumber, phaseName, status, qualityGates);
+  } catch {
+    // Phase updates are best-effort — don't fail if Godot isn't running
+  }
+  return { ok: true, phase_number: phaseNumber, phase_name: phaseName, status };
 }
 
 // ---------------------------------------------------------------------------

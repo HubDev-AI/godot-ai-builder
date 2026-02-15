@@ -97,6 +97,9 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_scan_project_files` | List all project files |
 | `godot_read_project_setting` | Read project.godot values |
 | `godot_log` | Send progress messages to the Godot dock panel |
+| `godot_save_build_state` | Save build checkpoint (phase progress, files, quality gates) |
+| `godot_get_build_state` | Load build checkpoint (detect interrupted builds) |
+| `godot_update_phase` | Update dock phase progress (number, name, status, gates) |
 
 ### Hooks
 
@@ -115,6 +118,17 @@ When you ask for a complete game, the Director runs a 6-phase build:
 7. **Phase 6: QA** — Error checking, edge cases, final verification
 
 Each phase has quality gates. Claude won't proceed until they pass.
+
+## Build Resumption
+
+If a Claude session is interrupted mid-build (rate limit, crash, closed terminal), the checkpoint system preserves your progress. When you restart Claude:
+
+1. Claude detects the saved build state (`.claude/build_state.json`)
+2. Shows you a summary: game name, last completed phase, files written
+3. Asks: "Continue this build?" or "Start fresh?"
+4. If you continue, it validates existing files and resumes from where it left off
+
+No more re-explaining your game after a session crash.
 
 ## Example Prompts
 
@@ -162,7 +176,7 @@ godot-ai-builder/
 ├── mcp-server/                # Node.js MCP bridge
 │   ├── index.js
 │   └── src/
-│       ├── tools.js           # 10 MCP tool definitions
+│       ├── tools.js           # 13 MCP tool definitions
 │       ├── godot-bridge.js    # HTTP client -> Godot
 │       ├── scene-parser.js    # .tscn parser
 │       └── asset-generator.js # SVG/PNG generator
@@ -170,7 +184,7 @@ godot-ai-builder/
 │   └── addons/ai_game_builder/
 │       ├── plugin.gd
 │       ├── http_bridge.gd     # HTTP server (port 6100)
-│       ├── dock.gd            # Status panel
+│       ├── dock.gd            # Status panel (progress, controls, error badges, quality gates)
 │       ├── error_collector.gd
 │       └── project_scanner.gd
 ├── knowledge/                 # Reference docs
