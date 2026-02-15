@@ -195,7 +195,68 @@ func _handle_log(body: Dictionary) -> Dictionary:
 	var message = body.get("message", "")
 	if not message.is_empty():
 		bridge_log.emit(message)
+		# Auto-detect phase changes from log messages so we don't depend
+		# on the AI calling godot_update_phase separately
+		_try_parse_phase_from_log(message)
 	return {"ok": true}
+
+
+func _try_parse_phase_from_log(message: String):
+	# Match patterns like "Phase 1:", "Phase 2 complete", "[MCP] Phase 3: Name — status"
+	var regex = RegEx.new()
+
+	# Pattern: "Phase N: Name — status" or "Phase N: Name - status"
+	regex.compile("Phase\\s+(\\d+)[:\\s]+([^—–-]+?)\\s*[—–-]\\s*(\\w+)")
+	var result = regex.search(message)
+	if result:
+		var phase_num = result.get_string(1).to_int()
+		var phase_name = result.get_string(2).strip_edges()
+		var status = result.get_string(3).strip_edges().to_lower()
+		if status in ["in_progress", "completed", "pending"]:
+			_auto_update_phase(phase_num, phase_name, status)
+			return
+
+	# Pattern: "Phase N complete" or "Phase N: Name complete"
+	regex.compile("Phase\\s+(\\d+)[:\\s]*([^.]*?)\\s*complete")
+	result = regex.search(message)
+	if result:
+		var phase_num = result.get_string(1).to_int()
+		var phase_name = result.get_string(2).strip_edges()
+		if phase_name.is_empty():
+			phase_name = _phase_name_for(phase_num)
+		_auto_update_phase(phase_num, phase_name, "completed")
+		return
+
+	# Pattern: "Starting Phase N" or "Beginning Phase N"
+	regex.compile("(?:Starting|Beginning|Entering)\\s+Phase\\s+(\\d+)")
+	result = regex.search(message)
+	if result:
+		var phase_num = result.get_string(1).to_int()
+		_auto_update_phase(phase_num, _phase_name_for(phase_num), "in_progress")
+		return
+
+
+func _auto_update_phase(phase_num: int, phase_name: String, status: String):
+	_phase_state = {
+		"phase_number": phase_num,
+		"phase_name": phase_name,
+		"status": status,
+		"quality_gates": _phase_state.get("quality_gates", {}),
+	}
+	_save_phase_state()
+	phase_updated.emit(_phase_state)
+
+
+func _phase_name_for(num: int) -> String:
+	match num:
+		0: return "Discovery & PRD"
+		1: return "Foundation"
+		2: return "Player Abilities"
+		3: return "Enemies & Challenges"
+		4: return "UI & Game Flow"
+		5: return "Polish & Game Feel"
+		6: return "Final QA"
+		_: return "Phase %d" % num
 
 
 func _handle_update_phase(body: Dictionary) -> Dictionary:
