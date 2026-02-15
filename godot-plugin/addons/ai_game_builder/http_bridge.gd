@@ -18,11 +18,17 @@ signal bridge_log(message: String)
 signal phase_updated(phase_data: Dictionary)
 
 
+const PHASE_STATE_PATH = "res://.claude/current_phase.json"
+
+
 func _ready():
 	var ErrorCollector = preload("res://addons/ai_game_builder/error_collector.gd")
 	var ProjectScanner = preload("res://addons/ai_game_builder/project_scanner.gd")
 	_error_collector = ErrorCollector.new()
 	_project_scanner = ProjectScanner.new()
+
+	# Restore phase state from disk (survives plugin reloads)
+	_load_phase_state()
 
 	_server = TCPServer.new()
 	var err = _server.listen(port, "127.0.0.1")
@@ -194,6 +200,7 @@ func _handle_log(body: Dictionary) -> Dictionary:
 
 func _handle_update_phase(body: Dictionary) -> Dictionary:
 	_phase_state = body
+	_save_phase_state()
 	phase_updated.emit(body)
 	bridge_log.emit("Phase %d: %s — %s" % [body.get("phase_number", 0), body.get("phase_name", ""), body.get("status", "")])
 	# Trigger filesystem scan so Godot picks up files written during this phase
@@ -204,6 +211,26 @@ func _handle_update_phase(body: Dictionary) -> Dictionary:
 
 func _handle_get_phase() -> Dictionary:
 	return _phase_state
+
+
+func _save_phase_state():
+	DirAccess.make_dir_recursive_absolute("res://.claude")
+	var file = FileAccess.open(PHASE_STATE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(_phase_state))
+		file.close()
+
+
+func _load_phase_state():
+	if not FileAccess.file_exists(PHASE_STATE_PATH):
+		return
+	var file = FileAccess.open(PHASE_STATE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var json = JSON.new()
+	if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
+		_phase_state = json.data
+	file.close()
 
 
 func _send_response(client: StreamPeerTCP, code: int, data: Dictionary):
