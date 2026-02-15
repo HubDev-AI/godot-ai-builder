@@ -45,17 +45,6 @@ theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
 
 [node name="ControlButtons" type="HBoxContainer" parent="."]
 
-[node name="RunBtn" type="Button" parent="ControlButtons"]
-text = "▶ Run"
-tooltip_text = "Run the main scene in the Godot editor (F5)"
-size_flags_horizontal = 3
-
-[node name="StopBtn" type="Button" parent="ControlButtons"]
-disabled = true
-text = "■ Stop"
-tooltip_text = "Stop the currently running scene (F8)"
-size_flags_horizontal = 3
-
 [node name="ReloadBtn" type="Button" parent="ControlButtons"]
 text = "↻ Reload"
 tooltip_text = "Rescan the filesystem so Godot picks up new/changed files"

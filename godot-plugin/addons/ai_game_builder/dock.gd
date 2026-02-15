@@ -13,8 +13,6 @@ var _seen_error_keys: Dictionary = {}  # track errors already added to log
 
 func _ready():
 	# Control buttons
-	$ControlButtons/RunBtn.pressed.connect(_on_run_pressed)
-	$ControlButtons/StopBtn.pressed.connect(_on_stop_pressed)
 	$ControlButtons/ReloadBtn.pressed.connect(_on_reload_pressed)
 
 	# Log filter buttons
@@ -93,18 +91,6 @@ func _sync_phase_display(phase_data: Dictionary):
 		_:
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 
-func _on_run_pressed():
-	if http_bridge:
-		http_bridge._handle_run({})
-		_log("Running main scene...", "progress")
-
-
-func _on_stop_pressed():
-	if http_bridge:
-		http_bridge._handle_stop()
-		_log("Stopped scene.", "progress")
-
-
 func _on_reload_pressed():
 	if http_bridge:
 		http_bridge._handle_reload()
@@ -142,10 +128,6 @@ func _poll_errors():
 		$ErrorSection/WarnBadge.add_theme_color_override("font_color", Color(0.9, 0.9, 0.2))
 	else:
 		$ErrorSection/WarnBadge.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-
-	# Update stop button state based on whether a scene is playing
-	if http_bridge.editor_interface:
-		$ControlButtons/StopBtn.disabled = not EditorInterface.is_playing_scene()
 
 	# Sync phase state from the bridge (catches missed signals, plugin reloads, etc.)
 	if not http_bridge._phase_state.is_empty():
