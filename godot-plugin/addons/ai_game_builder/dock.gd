@@ -12,9 +12,6 @@ var _seen_error_keys: Dictionary = {}  # track errors already added to log
 
 
 func _ready():
-	# Control buttons
-	$ControlButtons/ReloadBtn.pressed.connect(_on_reload_pressed)
-
 	# Log filter buttons
 	$LogFilterRow/FilterAll.pressed.connect(func(): _set_filter("all"))
 	$LogFilterRow/FilterErrors.pressed.connect(func(): _set_filter("error"))
@@ -90,12 +87,6 @@ func _sync_phase_display(phase_data: Dictionary):
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
 		_:
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-
-func _on_reload_pressed():
-	if http_bridge:
-		http_bridge._handle_reload()
-		_log("Filesystem reloaded.", "progress")
-
 
 func _poll_errors():
 	if http_bridge == null or http_bridge._error_collector == null:

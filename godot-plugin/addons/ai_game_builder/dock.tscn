@@ -43,13 +43,6 @@ theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
 
 [node name="Sep3" type="HSeparator" parent="."]
 
-[node name="ControlButtons" type="HBoxContainer" parent="."]
-
-[node name="ReloadBtn" type="Button" parent="ControlButtons"]
-text = "↻ Reload"
-tooltip_text = "Rescan the filesystem so Godot picks up new/changed files"
-size_flags_horizontal = 3
-
 [node name="ErrorSection" type="HBoxContainer" parent="."]
 
 [node name="ErrorLabel" type="Label" parent="ErrorSection"]
