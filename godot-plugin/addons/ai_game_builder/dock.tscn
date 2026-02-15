@@ -118,7 +118,7 @@ tooltip_text = "Clear all log messages"
 [node name="GatesTitle" type="Label" parent="QualityGatesSection"]
 text = "Quality Gates"
 tooltip_text = "Checklist of conditions that must pass before moving to the next build phase"
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 18
 
 [node name="GatesScroll" type="ScrollContainer" parent="QualityGatesSection"]
 custom_minimum_size = Vector2(0, 80)
