@@ -125,6 +125,15 @@ Available MCP tools:
 - `godot_get_build_state` — **Load build checkpoint** (check for interrupted builds at session start)
 - `godot_update_phase` — **Update dock phase progress** (phase number, name, status, quality gates)
 
+**Editor Integration tools** (verify work, use correct APIs, manipulate scenes directly):
+- `godot_get_scene_tree` — **Inspect the live scene tree** in the editor. Returns node hierarchy with types, scripts, and visibility. Call after writing .tscn files or adding nodes to verify structure.
+- `godot_get_class_info` — **Look up any Godot class** via ClassDB. Returns properties, methods, signals. Call before using unfamiliar classes to get correct API names.
+- `godot_add_node` — **Add a node** to the current scene. Specify parent path, name, type, and properties. Node persists in the scene.
+- `godot_update_node` — **Modify node properties** in the current scene (position, scale, visibility, etc.)
+- `godot_delete_node` — **Remove a node** from the current scene.
+- `godot_get_editor_screenshot` — **Capture the editor viewport** as a base64 PNG. Use to visually verify the game looks correct.
+- `godot_get_open_scripts` — **List open scripts** in the script editor for context.
+
 ## BUILD RESUMPTION
 
 At the START of every session, before analyzing the user's request:
@@ -298,6 +307,17 @@ Parse the user's prompt to determine:
 - **Genre**: shooter, platformer, puzzle, RPG, strategy, sandbox, custom
 - **Scope**: new project vs. modify existing vs. full game (→ director) vs. simple game
 - **Features**: player, enemies, UI, audio, physics, save system, etc.
+
+### Scene Verification (MANDATORY for all builds)
+After writing .tscn files or adding nodes programmatically:
+1. Call `godot_get_scene_tree()` to verify the node hierarchy is correct
+2. Check that expected nodes exist with the right types and scripts
+3. If nodes are wrong: use `godot_update_node` or `godot_delete_node` to fix without rewriting files
+
+### API Lookup (before unfamiliar classes)
+Before using a Godot class you haven't used before:
+1. Call `godot_get_class_info("ClassName")` to get correct property names and methods
+2. This prevents wrong API usage (e.g., wrong property names, missing method args)
 
 ### 2. Scan Project State
 ALWAYS call `godot_get_project_state` first to check:

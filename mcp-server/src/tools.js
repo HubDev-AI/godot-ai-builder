@@ -222,6 +222,131 @@ export const TOOL_DEFINITIONS = [
       required: ["phase_number", "phase_name", "status"],
     },
   },
+  // --- Editor Integration Tools ---
+  {
+    name: "godot_get_scene_tree",
+    description:
+      "Get the full node hierarchy of the currently edited scene in the Godot editor. Returns node names, types, paths, attached scripts, and visibility. Use this to verify scene structure after creating nodes or writing .tscn files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        max_depth: {
+          type: "number",
+          description: "Maximum tree depth to return (default: 10)",
+        },
+      },
+    },
+  },
+  {
+    name: "godot_get_class_info",
+    description:
+      "Get properties, methods, and signals for any Godot built-in class via ClassDB. Use this before writing scripts to verify correct property names, method signatures, and available signals. Prevents wrong API usage.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        class_name: {
+          type: "string",
+          description:
+            'Godot class name (e.g. "CharacterBody2D", "Sprite2D", "Control")',
+        },
+        include_inherited: {
+          type: "boolean",
+          description:
+            "Include inherited properties/methods/signals from parent classes (default: false)",
+        },
+      },
+      required: ["class_name"],
+    },
+  },
+  {
+    name: "godot_add_node",
+    description:
+      "Add a new node to the currently edited scene in the Godot editor. The node is added as a child of parent_path and persisted in the scene. Use this instead of writing .tscn files for simple scene modifications.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        parent_path: {
+          type: "string",
+          description:
+            'NodePath to the parent node (default: "." for scene root)',
+        },
+        node_name: {
+          type: "string",
+          description: "Name for the new node",
+        },
+        node_type: {
+          type: "string",
+          description:
+            'Godot node class (e.g. "Sprite2D", "CharacterBody2D", "Label")',
+        },
+        properties: {
+          type: "object",
+          description:
+            'Optional properties to set. Supports Vector2 ({"x":0,"y":0}), Color ({"r":1,"g":0,"b":0}), and resource paths ("res://...")',
+        },
+      },
+      required: ["node_name", "node_type"],
+    },
+  },
+  {
+    name: "godot_update_node",
+    description:
+      "Update properties on an existing node in the currently edited scene. Use this to modify position, scale, visibility, or any other property without rewriting scene files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        node_path: {
+          type: "string",
+          description: "NodePath to the node to update",
+        },
+        properties: {
+          type: "object",
+          description:
+            'Properties to set. Supports Vector2 ({"x":0,"y":0}), Color ({"r":1,"g":0,"b":0}), and resource paths ("res://...")',
+        },
+      },
+      required: ["node_path", "properties"],
+    },
+  },
+  {
+    name: "godot_delete_node",
+    description:
+      "Remove a node from the currently edited scene in the Godot editor.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        node_path: {
+          type: "string",
+          description: "NodePath to the node to delete",
+        },
+      },
+      required: ["node_path"],
+    },
+  },
+  {
+    name: "godot_get_editor_screenshot",
+    description:
+      'Capture the Godot editor 2D or 3D viewport as a base64-encoded PNG image. Use this to visually verify the game looks correct after creating scenes or modifying nodes. Claude can "see" the result.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        viewport: {
+          type: "string",
+          enum: ["2d", "3d"],
+          description: 'Which viewport to capture (default: "2d")',
+        },
+      },
+    },
+  },
+  {
+    name: "godot_get_open_scripts",
+    description:
+      "Get the list of scripts currently open in the Godot script editor. Provides context about what the developer is working on.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -255,6 +380,20 @@ export async function handleToolCall(name, args) {
       return await toolGetBuildState();
     case "godot_update_phase":
       return await toolUpdatePhase(args.phase_number, args.phase_name, args.status, args.quality_gates || {});
+    case "godot_get_scene_tree":
+      return await toolGetSceneTree(args.max_depth || 10);
+    case "godot_get_class_info":
+      return await toolGetClassInfo(args.class_name, args.include_inherited || false);
+    case "godot_add_node":
+      return await toolAddNode(args.parent_path || ".", args.node_name, args.node_type, args.properties || {});
+    case "godot_update_node":
+      return await toolUpdateNode(args.node_path, args.properties || {});
+    case "godot_delete_node":
+      return await toolDeleteNode(args.node_path);
+    case "godot_get_editor_screenshot":
+      return await toolGetEditorScreenshot(args.viewport || "2d");
+    case "godot_get_open_scripts":
+      return await toolGetOpenScripts();
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -425,6 +564,96 @@ async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
     // Phase updates are best-effort — don't fail if Godot isn't running
   }
   return { ok: true, phase_number: phaseNumber, phase_name: phaseName, status };
+}
+
+// ---------------------------------------------------------------------------
+// Editor Integration Tools
+// ---------------------------------------------------------------------------
+
+async function toolGetSceneTree(maxDepth) {
+  await bridge.sendLog("[MCP] Getting scene tree...");
+  const result = await bridge.getSceneTree(maxDepth);
+  const nodeCount = countNodes(result);
+  await bridge.sendLog(`[MCP] Scene tree: ${nodeCount} nodes`);
+  return result;
+}
+
+function countNodes(node) {
+  if (!node || node.error) return 0;
+  let count = 1;
+  if (node.children) {
+    for (const child of node.children) {
+      count += countNodes(child);
+    }
+  }
+  return count;
+}
+
+async function toolGetClassInfo(className, includeInherited) {
+  await bridge.sendLog(`[MCP] Looking up class: ${className}`);
+  const result = await bridge.getClassInfo(className, includeInherited);
+  if (result.error) {
+    await bridge.sendLog(`[MCP] Class not found: ${className}`);
+  } else {
+    const pCount = result.properties?.length || 0;
+    const mCount = result.methods?.length || 0;
+    const sCount = result.signals?.length || 0;
+    await bridge.sendLog(`[MCP] ${className}: ${pCount} props, ${mCount} methods, ${sCount} signals`);
+  }
+  return result;
+}
+
+async function toolAddNode(parentPath, nodeName, nodeType, properties) {
+  await bridge.sendLog(`[MCP] Adding node: ${nodeName} (${nodeType}) under ${parentPath}`);
+  const result = await bridge.addNode(parentPath, nodeName, nodeType, properties);
+  if (result.success) {
+    await bridge.sendLog(`[MCP] Node added: ${result.path}`);
+  } else {
+    await bridge.sendLog(`[MCP] Failed to add node: ${result.error || "unknown error"}`);
+  }
+  return result;
+}
+
+async function toolUpdateNode(nodePath, properties) {
+  const propNames = Object.keys(properties).join(", ");
+  await bridge.sendLog(`[MCP] Updating node ${nodePath}: ${propNames}`);
+  const result = await bridge.updateNode(nodePath, properties);
+  if (result.success) {
+    await bridge.sendLog(`[MCP] Node updated: ${nodePath}`);
+  } else {
+    await bridge.sendLog(`[MCP] Failed to update node: ${result.error || "unknown error"}`);
+  }
+  return result;
+}
+
+async function toolDeleteNode(nodePath) {
+  await bridge.sendLog(`[MCP] Deleting node: ${nodePath}`);
+  const result = await bridge.deleteNode(nodePath);
+  if (result.success) {
+    await bridge.sendLog(`[MCP] Node deleted: ${nodePath}`);
+  } else {
+    await bridge.sendLog(`[MCP] Failed to delete node: ${result.error || "unknown error"}`);
+  }
+  return result;
+}
+
+async function toolGetEditorScreenshot(viewport) {
+  await bridge.sendLog(`[MCP] Capturing ${viewport} viewport screenshot...`);
+  const result = await bridge.getEditorScreenshot(viewport);
+  if (result.image) {
+    await bridge.sendLog(`[MCP] Screenshot captured: ${result.width}x${result.height}`);
+  } else {
+    await bridge.sendLog(`[MCP] Screenshot failed: ${result.error || "unknown error"}`);
+  }
+  return result;
+}
+
+async function toolGetOpenScripts() {
+  await bridge.sendLog("[MCP] Getting open scripts...");
+  const result = await bridge.getOpenScripts();
+  const count = result.scripts?.length || 0;
+  await bridge.sendLog(`[MCP] ${count} scripts open in editor`);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

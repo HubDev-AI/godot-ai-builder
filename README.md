@@ -16,7 +16,7 @@ directly to disk               |
 Godot auto-reloads      Run / Stop / Get Errors
 ```
 
-Claude Code is the brain. The plugin gives it 14 specialized game development skills, MCP tools for editor integration, and a Stop hook that keeps it focused until the build is complete.
+Claude Code is the brain. The plugin gives it 14 specialized game development skills, 20 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
 
 ## Install
 
@@ -83,7 +83,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot-ops` | MCP tool operations: run, stop, errors, reload |
 | `godot-templates` | Genre-specific templates with file manifests |
 
-### MCP Tools (via godot-bridge)
+### MCP Tools (20 tools via godot-bridge)
 
 | Tool | Purpose |
 |------|---------|
@@ -100,6 +100,18 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_save_build_state` | Save build checkpoint (phase progress, files, quality gates) |
 | `godot_get_build_state` | Load build checkpoint (detect interrupted builds) |
 | `godot_update_phase` | Update dock phase progress (number, name, status, gates) |
+
+**Editor Integration** (inspect, verify, manipulate — what Ziva charges $20/month for):
+
+| Tool | Purpose |
+|------|---------|
+| `godot_get_scene_tree` | Inspect the live scene tree — node hierarchy, types, scripts, visibility |
+| `godot_get_class_info` | Look up any Godot class — properties, methods, signals via ClassDB |
+| `godot_add_node` | Add a node to the current scene with type and properties |
+| `godot_update_node` | Modify properties on an existing node (position, scale, etc.) |
+| `godot_delete_node` | Remove a node from the current scene |
+| `godot_get_editor_screenshot` | Capture 2D/3D viewport as base64 PNG — Claude can "see" the game |
+| `godot_get_open_scripts` | List scripts open in the script editor for context |
 
 ### Hooks
 
@@ -176,7 +188,7 @@ godot-ai-builder/
 ├── mcp-server/                # Node.js MCP bridge
 │   ├── index.js
 │   └── src/
-│       ├── tools.js           # 13 MCP tool definitions
+│       ├── tools.js           # 20 MCP tool definitions
 │       ├── godot-bridge.js    # HTTP client -> Godot
 │       ├── scene-parser.js    # .tscn parser
 │       └── asset-generator.js # SVG/PNG generator

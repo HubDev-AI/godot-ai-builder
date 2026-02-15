@@ -388,6 +388,12 @@ scene.some_signal.connect(_handler)
 - [ ] Background fills the visible area
 - [ ] Player has a visible shape with intentional color
 
+### Scene Verification (MANDATORY after quality gate)
+1. Call `godot_get_scene_tree()` to verify the main scene structure is correct
+2. Check that Player node exists with the right type (CharacterBody2D, etc.)
+3. Call `godot_get_editor_screenshot()` to visually verify the game looks right
+4. If nodes are wrong: use `godot_update_node` / `godot_delete_node` to fix
+
 **DO NOT proceed to Phase 2 until Phase 1 passes.**
 
 **After gate passes**: `godot_update_phase(1, "Foundation", "completed", {...gates})` + `godot_save_build_state({...})`
@@ -515,6 +521,9 @@ Call `godot_generate_asset` for EVERY game entity that doesn't have a proper vis
 - [ ] Game is fun for at least 60 seconds
 
 **After gate passes**: `godot_update_phase(5, "Polish & Game Feel", "completed", {...gates})` + `godot_save_build_state({...})`
+
+### API Lookup Rule
+Before using ANY Godot class for the first time in a phase, call `godot_get_class_info("ClassName")` to verify correct property names, method signatures, and available signals. This prevents wrong API usage.
 
 ## PHASE 6: Final QA & Delivery
 

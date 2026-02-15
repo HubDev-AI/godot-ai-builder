@@ -82,6 +82,42 @@ export async function updatePhase(phaseNumber, phaseName, status, qualityGates) 
   });
 }
 
+export async function getSceneTree(maxDepth) {
+  return bridgeRequest("GET", `/scene_tree?max_depth=${maxDepth}`);
+}
+
+export async function getClassInfo(className, includeInherited) {
+  return bridgeRequest("GET", `/class_info?class_name=${encodeURIComponent(className)}&inherited=${includeInherited}`);
+}
+
+export async function addNode(parentPath, nodeName, nodeType, properties) {
+  return bridgeRequest("POST", "/add_node", {
+    parent_path: parentPath,
+    node_name: nodeName,
+    node_type: nodeType,
+    properties: properties || {},
+  });
+}
+
+export async function updateNode(nodePath, properties) {
+  return bridgeRequest("POST", "/update_node", {
+    node_path: nodePath,
+    properties: properties || {},
+  });
+}
+
+export async function deleteNode(nodePath) {
+  return bridgeRequest("POST", "/delete_node", { node_path: nodePath });
+}
+
+export async function getEditorScreenshot(viewport) {
+  return bridgeRequest("GET", `/screenshot?viewport=${viewport}`);
+}
+
+export async function getOpenScripts() {
+  return bridgeRequest("GET", "/open_scripts");
+}
+
 export async function isConnected() {
   try {
     await getStatus();

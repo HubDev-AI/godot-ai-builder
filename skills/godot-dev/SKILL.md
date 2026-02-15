@@ -68,7 +68,7 @@ godot-ai-builder/
 │   ├── index.js                 # MCP server entry — Server + StdioServerTransport
 │   ├── package.json             # Dependencies: @modelcontextprotocol/sdk, sharp
 │   └── src/
-│       ├── tools.js             # TOOL_DEFINITIONS array + handleToolCall dispatcher + handlers
+│       ├── tools.js             # TOOL_DEFINITIONS array (20 tools) + handleToolCall dispatcher + handlers
 │       ├── godot-bridge.js      # HTTP client → Godot editor (port 6100)
 │       ├── scene-parser.js      # .tscn text format parser
 │       └── asset-generator.js   # SVG/PNG sprite generator (layered gradients, shadows, glow)
@@ -145,6 +145,13 @@ specialized skills based on intent. When adding a new skill:
   - `POST /log` → send message to dock panel
   - `POST /phase` → update phase state, emit phase_updated signal
   - `GET /phase` → return current phase state
+  - `GET /scene_tree?max_depth=N` → live scene tree hierarchy
+  - `GET /class_info?class_name=X&inherited=bool` → ClassDB lookup
+  - `POST /add_node` → add node to edited scene
+  - `POST /update_node` → modify node properties
+  - `POST /delete_node` → remove node from scene
+  - `GET /screenshot?viewport=2d|3d` → editor viewport capture (base64 PNG)
+  - `GET /open_scripts` → list open scripts in script editor
 - `dock.gd` displays phase progress bar, control buttons (Run/Stop/Reload), error badges, filtered log, and quality gates checklist. Connected to bridge via signals `bridge_log(msg)` and `phase_updated(data)`
 - `error_collector.gd` uses two strategies: active script validation + Godot log scanning
 - `project_scanner.gd` walks the filesystem for /state responses

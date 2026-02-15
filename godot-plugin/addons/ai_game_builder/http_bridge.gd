@@ -121,7 +121,15 @@ func _handle_request(client: StreamPeerTCP, raw: String):
 
 
 func _route(method: String, path: String, body: Dictionary) -> Dictionary:
-	match [method, path]:
+	# Extract base path and query string
+	var base_path = path
+	var query_params: Dictionary = {}
+	var q_idx = path.find("?")
+	if q_idx >= 0:
+		base_path = path.substr(0, q_idx)
+		query_params = _parse_query_string(path.substr(q_idx + 1))
+
+	match [method, base_path]:
 		["GET", "/status"]:
 			return {"code": 200, "data": _handle_status()}
 		["GET", "/errors"]:
@@ -138,6 +146,20 @@ func _route(method: String, path: String, body: Dictionary) -> Dictionary:
 			return {"code": 200, "data": _handle_update_phase(body)}
 		["GET", "/phase"]:
 			return {"code": 200, "data": _handle_get_phase()}
+		["GET", "/scene_tree"]:
+			return {"code": 200, "data": _handle_get_scene_tree(query_params)}
+		["GET", "/class_info"]:
+			return {"code": 200, "data": _handle_get_class_info(query_params)}
+		["POST", "/add_node"]:
+			return {"code": 200, "data": _handle_add_node(body)}
+		["POST", "/update_node"]:
+			return {"code": 200, "data": _handle_update_node(body)}
+		["POST", "/delete_node"]:
+			return {"code": 200, "data": _handle_delete_node(body)}
+		["GET", "/screenshot"]:
+			return {"code": 200, "data": _handle_screenshot(query_params)}
+		["GET", "/open_scripts"]:
+			return {"code": 200, "data": _handle_open_scripts()}
 		_:
 			return {"code": 404, "data": {"error": "not found", "path": path}}
 
@@ -292,6 +314,304 @@ func _load_phase_state():
 	if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
 		_phase_state = json.data
 	file.close()
+
+
+## --- Query string parsing ---
+
+
+func _parse_query_string(qs: String) -> Dictionary:
+	var params: Dictionary = {}
+	for pair in qs.split("&"):
+		var kv = pair.split("=")
+		if kv.size() == 2:
+			params[kv[0].uri_decode()] = kv[1].uri_decode()
+	return params
+
+
+## --- Editor Integration Handlers ---
+
+
+func _handle_get_scene_tree(query: Dictionary) -> Dictionary:
+	var max_depth = int(query.get("max_depth", "10"))
+	var root = EditorInterface.get_edited_scene_root()
+	if root == null:
+		return {"error": "No scene open in the editor"}
+	return _serialize_node_tree(root, max_depth, 0)
+
+
+func _serialize_node_tree(node: Node, max_depth: int, current_depth: int) -> Dictionary:
+	var result: Dictionary = {
+		"name": node.name,
+		"type": node.get_class(),
+		"path": str(node.get_path()) if current_depth == 0 else str(EditorInterface.get_edited_scene_root().get_path_to(node)),
+	}
+
+	# Include script path if attached
+	var script = node.get_script()
+	if script and script is Script and not script.resource_path.is_empty():
+		result["script"] = script.resource_path
+
+	# Include key display properties
+	if node is CanvasItem:
+		result["visible"] = node.visible
+	if node is Node3D:
+		result["visible"] = node.visible
+
+	result["process_mode"] = node.process_mode
+
+	# Recurse into children
+	var children_arr: Array = []
+	if current_depth < max_depth:
+		for child in node.get_children():
+			children_arr.append(_serialize_node_tree(child, max_depth, current_depth + 1))
+	result["children"] = children_arr
+
+	return result
+
+
+func _handle_get_class_info(query: Dictionary) -> Dictionary:
+	var class_name_param: String = query.get("class_name", "")
+	var include_inherited: bool = query.get("inherited", "false") == "true"
+
+	if class_name_param.is_empty():
+		return {"error": "class_name parameter required"}
+
+	if not ClassDB.class_exists(class_name_param):
+		return {"error": "Unknown class: " + class_name_param}
+
+	# Properties — no_inheritance flag is inverted from include_inherited
+	var raw_props = ClassDB.class_get_property_list(class_name_param, !include_inherited)
+	var properties: Array = []
+	for p in raw_props:
+		# Filter out internal properties
+		var usage = p.get("usage", 0)
+		if usage & PROPERTY_USAGE_INTERNAL:
+			continue
+		if usage & PROPERTY_USAGE_EDITOR or usage & PROPERTY_USAGE_STORAGE:
+			properties.append({
+				"name": p.get("name", ""),
+				"type": _type_name(p.get("type", 0)),
+				"usage": usage,
+			})
+
+	# Methods
+	var raw_methods = ClassDB.class_get_method_list(class_name_param, !include_inherited)
+	var methods: Array = []
+	for m in raw_methods:
+		var method_name: String = m.get("name", "")
+		# Skip internal/private methods
+		if method_name.begins_with("_"):
+			continue
+		var args_arr: Array = []
+		for arg in m.get("args", []):
+			args_arr.append({
+				"name": arg.get("name", ""),
+				"type": _type_name(arg.get("type", 0)),
+			})
+		methods.append({
+			"name": method_name,
+			"args": args_arr,
+			"return_type": _type_name(m.get("return", {}).get("type", 0)),
+		})
+
+	# Signals
+	var raw_signals = ClassDB.class_get_signal_list(class_name_param, !include_inherited)
+	var signals_arr: Array = []
+	for s in raw_signals:
+		var sig_args: Array = []
+		for arg in s.get("args", []):
+			sig_args.append({
+				"name": arg.get("name", ""),
+				"type": _type_name(arg.get("type", 0)),
+			})
+		signals_arr.append({
+			"name": s.get("name", ""),
+			"args": sig_args,
+		})
+
+	return {
+		"class_name": class_name_param,
+		"parent_class": ClassDB.get_parent_class(class_name_param),
+		"properties": properties,
+		"methods": methods,
+		"signals": signals_arr,
+	}
+
+
+func _type_name(type_id: int) -> String:
+	match type_id:
+		TYPE_NIL: return "nil"
+		TYPE_BOOL: return "bool"
+		TYPE_INT: return "int"
+		TYPE_FLOAT: return "float"
+		TYPE_STRING: return "String"
+		TYPE_VECTOR2: return "Vector2"
+		TYPE_VECTOR2I: return "Vector2i"
+		TYPE_RECT2: return "Rect2"
+		TYPE_VECTOR3: return "Vector3"
+		TYPE_VECTOR3I: return "Vector3i"
+		TYPE_TRANSFORM2D: return "Transform2D"
+		TYPE_VECTOR4: return "Vector4"
+		TYPE_PLANE: return "Plane"
+		TYPE_QUATERNION: return "Quaternion"
+		TYPE_AABB: return "AABB"
+		TYPE_BASIS: return "Basis"
+		TYPE_TRANSFORM3D: return "Transform3D"
+		TYPE_COLOR: return "Color"
+		TYPE_STRING_NAME: return "StringName"
+		TYPE_NODE_PATH: return "NodePath"
+		TYPE_RID: return "RID"
+		TYPE_OBJECT: return "Object"
+		TYPE_CALLABLE: return "Callable"
+		TYPE_SIGNAL: return "Signal"
+		TYPE_DICTIONARY: return "Dictionary"
+		TYPE_ARRAY: return "Array"
+		TYPE_PACKED_BYTE_ARRAY: return "PackedByteArray"
+		TYPE_PACKED_INT32_ARRAY: return "PackedInt32Array"
+		TYPE_PACKED_INT64_ARRAY: return "PackedInt64Array"
+		TYPE_PACKED_FLOAT32_ARRAY: return "PackedFloat32Array"
+		TYPE_PACKED_FLOAT64_ARRAY: return "PackedFloat64Array"
+		TYPE_PACKED_STRING_ARRAY: return "PackedStringArray"
+		TYPE_PACKED_VECTOR2_ARRAY: return "PackedVector2Array"
+		TYPE_PACKED_VECTOR3_ARRAY: return "PackedVector3Array"
+		TYPE_PACKED_COLOR_ARRAY: return "PackedColorArray"
+		_: return "Variant"
+
+
+func _handle_add_node(body: Dictionary) -> Dictionary:
+	var root = EditorInterface.get_edited_scene_root()
+	if root == null:
+		return {"error": "No scene open in the editor"}
+
+	var parent_path: String = body.get("parent_path", ".")
+	var node_name: String = body.get("node_name", "")
+	var node_type: String = body.get("node_type", "")
+	var properties: Dictionary = body.get("properties", {})
+
+	if node_name.is_empty() or node_type.is_empty():
+		return {"error": "node_name and node_type are required"}
+
+	if not ClassDB.class_exists(node_type):
+		return {"error": "Unknown node type: " + node_type}
+
+	if not ClassDB.can_instantiate(node_type):
+		return {"error": "Cannot instantiate: " + node_type}
+
+	var parent: Node = root if parent_path == "." else root.get_node_or_null(parent_path)
+	if parent == null:
+		return {"error": "Parent not found: " + parent_path}
+
+	var new_node = ClassDB.instantiate(node_type)
+	new_node.name = node_name
+
+	for prop_name in properties:
+		var val = _parse_property_value(properties[prop_name])
+		new_node.set(prop_name, val)
+
+	parent.add_child(new_node)
+	new_node.owner = root  # Critical: makes node persist in saved scene
+
+	var result_path = str(root.get_path_to(new_node))
+	return {"success": true, "path": result_path}
+
+
+func _handle_update_node(body: Dictionary) -> Dictionary:
+	var root = EditorInterface.get_edited_scene_root()
+	if root == null:
+		return {"error": "No scene open in the editor"}
+
+	var node_path: String = body.get("node_path", "")
+	var properties: Dictionary = body.get("properties", {})
+
+	if node_path.is_empty():
+		return {"error": "node_path is required"}
+
+	var node: Node = root if node_path == "." else root.get_node_or_null(node_path)
+	if node == null:
+		return {"error": "Node not found: " + node_path}
+
+	var updated: Array = []
+	for prop_name in properties:
+		var val = _parse_property_value(properties[prop_name])
+		node.set(prop_name, val)
+		updated.append(prop_name)
+
+	return {"success": true, "updated": updated}
+
+
+func _handle_delete_node(body: Dictionary) -> Dictionary:
+	var root = EditorInterface.get_edited_scene_root()
+	if root == null:
+		return {"error": "No scene open in the editor"}
+
+	var node_path: String = body.get("node_path", "")
+	if node_path.is_empty() or node_path == ".":
+		return {"error": "Cannot delete the scene root"}
+
+	var node: Node = root.get_node_or_null(node_path)
+	if node == null:
+		return {"error": "Node not found: " + node_path}
+
+	node.get_parent().remove_child(node)
+	node.queue_free()
+	return {"success": true}
+
+
+func _parse_property_value(val):
+	if val is Dictionary:
+		if val.has("x") and val.has("y"):
+			if val.has("z"):
+				if val.has("w"):
+					return Vector4(val.x, val.y, val.z, val.w)
+				return Vector3(val.x, val.y, val.z)
+			return Vector2(val.x, val.y)
+		if val.has("r") and val.has("g") and val.has("b"):
+			return Color(val.r, val.g, val.b, val.get("a", 1.0))
+	if val is String and val.begins_with("res://"):
+		return load(val)
+	return val
+
+
+func _handle_screenshot(query: Dictionary) -> Dictionary:
+	var viewport_type: String = query.get("viewport", "2d")
+
+	# Try to capture from the editor viewport
+	var vp: SubViewport = null
+	if viewport_type == "3d":
+		vp = EditorInterface.get_editor_viewport_3d(0)
+	else:
+		vp = EditorInterface.get_editor_viewport_2d()
+
+	if vp == null:
+		return {"error": "Could not access editor viewport"}
+
+	var img: Image = vp.get_texture().get_image()
+	if img == null:
+		return {"error": "Could not capture viewport image"}
+
+	var png_bytes: PackedByteArray = img.save_png_to_buffer()
+	var base64: String = Marshalls.raw_to_base64(png_bytes)
+	return {"image": base64, "width": img.get_width(), "height": img.get_height()}
+
+
+func _handle_open_scripts() -> Dictionary:
+	var script_editor = EditorInterface.get_script_editor()
+	if script_editor == null:
+		return {"error": "Script editor not available"}
+
+	var open_scripts = script_editor.get_open_scripts()
+	var result: Array = []
+	for s in open_scripts:
+		var entry: Dictionary = {}
+		if s is Script:
+			entry["path"] = s.resource_path
+			entry["class"] = s.get_instance_base_type()
+		else:
+			entry["path"] = s.resource_path if s else "unknown"
+			entry["class"] = "unknown"
+		result.append(entry)
+
+	return {"scripts": result}
 
 
 func _send_response(client: StreamPeerTCP, code: int, data: Dictionary):
