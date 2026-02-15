@@ -6,6 +6,11 @@ var http_bridge: Node
 
 
 func _enter_tree():
+	# Auto-reload scripts changed on disk by the AI (suppresses "file changed" modals)
+	var settings = EditorInterface.get_editor_settings()
+	if settings:
+		settings.set_setting("text_editor/behavior/files/auto_reload_scripts_on_external_change", true)
+
 	# Start the HTTP bridge so the MCP server can communicate with us
 	var BridgeClass = preload("res://addons/ai_game_builder/http_bridge.gd")
 	http_bridge = BridgeClass.new()

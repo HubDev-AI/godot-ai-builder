@@ -19,7 +19,7 @@ func _ready():
 
 	# Log filter buttons
 	$LogFilterRow/FilterAll.pressed.connect(func(): _set_filter("all"))
-	$LogFilterRow/FilterErrors.pressed.connect(func(): _set_filter("errors"))
+	$LogFilterRow/FilterErrors.pressed.connect(func(): _set_filter("error"))
 	$LogFilterRow/FilterProgress.pressed.connect(func(): _set_filter("progress"))
 
 	# Clear button
@@ -160,7 +160,7 @@ func _poll_errors():
 func _set_filter(filter: String):
 	_current_filter = filter
 	$LogFilterRow/FilterAll.button_pressed = (filter == "all")
-	$LogFilterRow/FilterErrors.button_pressed = (filter == "errors")
+	$LogFilterRow/FilterErrors.button_pressed = (filter == "error")
 	$LogFilterRow/FilterProgress.button_pressed = (filter == "progress")
 	_refresh_log()
 

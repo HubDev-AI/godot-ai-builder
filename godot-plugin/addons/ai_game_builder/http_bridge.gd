@@ -196,6 +196,9 @@ func _handle_update_phase(body: Dictionary) -> Dictionary:
 	_phase_state = body
 	phase_updated.emit(body)
 	bridge_log.emit("Phase %d: %s — %s" % [body.get("phase_number", 0), body.get("phase_name", ""), body.get("status", "")])
+	# Trigger filesystem scan so Godot picks up files written during this phase
+	if editor_interface:
+		EditorInterface.get_resource_filesystem().scan()
 	return {"ok": true}
 
 
