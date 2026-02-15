@@ -312,6 +312,16 @@ Phase 5 (sequential — main agent):
   Polish requires seeing the whole picture — do not parallelize
 ```
 
+### Sub-Agent Rules (CRITICAL)
+
+Every sub-agent MUST:
+1. **Call `godot_log` constantly** — the Godot dock is the user's main visibility into agent work. Prefix with agent name: `godot_log("[Agent: enemies] Writing enemy_chase.gd — chase AI at 90px/s...")`
+2. **Report before AND after each file** — `godot_log("[Agent: UI] Starting hud.gd...")` then `godot_log("[Agent: UI] Finished hud.gd — score + health + wave indicator")`
+3. **Report errors** — `godot_log("[Agent: player] Found collision issue — fixing layer masks...")`
+4. **Sub-agents can manage the build lock** — they share the filesystem with the main agent, so they can read/write `.claude/.build_in_progress` if needed
+
+Without `godot_log`, the Godot dock shows NOTHING while agents work. This makes the user think nothing is happening. Call it 3-5 times per file write minimum.
+
 ## EXECUTION PROTOCOL
 
 When executing, ALWAYS:
@@ -334,37 +344,48 @@ When executing, ALWAYS:
    rm .claude/.build_in_progress
    ```
 
-## PROGRESS REPORTING (MANDATORY)
+## PROGRESS REPORTING (MANDATORY — TERMINAL + GODOT DOCK)
 
-You MUST print progress after EVERY action. The user should NEVER wonder what's happening.
+You MUST report progress in TWO places after EVERY action:
+1. **Terminal**: Print text so the user sees it in Claude Code
+2. **Godot dock**: Call `godot_log` so the user sees activity in the Godot editor panel
 
-**Per file**: Report each file as you write it:
+**Per file**: Report each file as you write it — call `godot_log` BEFORE and AFTER:
 ```
-Writing scripts/player.gd — WASD movement, mouse aim, shooting (layer 1, mask 4)...
-Writing scripts/enemy.gd — Chase AI at 90px/s, 30 HP, death particles...
-Writing scripts/main.gd — Game loop: spawn timer 1.5s, score tracking, health 100...
+godot_log("Writing scripts/player.gd — WASD movement, mouse aim, shooting (layer 1, mask 4)...")
+[...write the file...]
+godot_log("✓ scripts/player.gd written — 85 lines")
+
+godot_log("Writing scripts/enemy.gd — Chase AI at 90px/s, 30 HP, death particles...")
+[...write the file...]
+godot_log("✓ scripts/enemy.gd written — 120 lines")
 ```
 
 **Per phase**: Report completion with gate results:
 ```
---- Phase 1: Foundation ---
-Created: player.gd, main.gd, project.godot
-Reloading filesystem... done.
-Running game... 0 errors.
-Quality gates: 5/5 passed
-  [x] Player moves smoothly
-  [x] Camera follows player
-  [x] No errors in console
-  [x] Background fills visible area
-  [x] Player has visible shape
-Moving to Phase 2.
+godot_log("=== Phase 1: Foundation — Starting ===")
+[...build phase...]
+godot_log("=== Phase 1: Foundation — Complete ===")
+godot_log("Quality gates: 5/5 passed")
+godot_log("Moving to Phase 2: Player Abilities")
 ```
 
 **Per error fix**: Report the error and the fix:
 ```
-ERROR: "Identifier 'GameManager' not declared" in scripts/main.gd:15
-FIX: GameManager autoload missing from project.godot. Adding [autoload] section...
+godot_log("ERROR: 'GameManager' not declared in scripts/main.gd:15")
+godot_log("FIX: Adding GameManager to [autoload] in project.godot...")
+godot_log("✓ Error fixed. Retesting...")
 ```
+
+**Per test cycle**: Report the build-test-fix loop:
+```
+godot_log("Reloading filesystem...")
+godot_log("Running game...")
+godot_log("Checking errors... 0 errors found")
+godot_log("Game running successfully!")
+```
+
+Call `godot_log` as much as possible. **3-5 calls per file write minimum.** The user wants constant visibility.
 
 **IMPORTANT**: The Stop hook will prevent Claude from finishing while `.claude/.build_in_progress` exists. If the user explicitly asks to cancel, remove the file before stopping.
 

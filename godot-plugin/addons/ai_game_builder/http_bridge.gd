@@ -124,6 +124,8 @@ func _route(method: String, path: String, body: Dictionary) -> Dictionary:
 			return {"code": 200, "data": _handle_stop()}
 		["POST", "/reload"]:
 			return {"code": 200, "data": _handle_reload()}
+		["POST", "/log"]:
+			return {"code": 200, "data": _handle_log(body)}
 		_:
 			return {"code": 404, "data": {"error": "not found", "path": path}}
 
@@ -174,6 +176,13 @@ func _handle_reload() -> Dictionary:
 	if editor_interface:
 		editor_interface.get_resource_filesystem().scan()
 		bridge_log.emit("Filesystem rescanned")
+	return {"ok": true}
+
+
+func _handle_log(body: Dictionary) -> Dictionary:
+	var message = body.get("message", "")
+	if not message.is_empty():
+		bridge_log.emit(message)
 	return {"ok": true}
 
 

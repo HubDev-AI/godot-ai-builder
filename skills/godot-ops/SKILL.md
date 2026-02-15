@@ -17,15 +17,20 @@ Use `godot_reload_filesystem`, `godot_run_scene`, `godot_get_errors`, etc.
 If MCP tools aren't available, stop and tell the user:
 > "MCP tools not available. Start Claude Code with: `claude --plugin-dir /path/to/godot-ai-builder`"
 
-## RULE: Always Report Progress
+## RULE: Always Report Progress (Terminal + Godot Dock)
 
-After EVERY action, tell the user what happened:
-- "Reloading Godot filesystem..."
-- "Running game... checking for errors..."
-- "Found 2 errors. Fixing scripts/player.gd line 34..."
-- "Game running. 0 errors. Phase 1 complete."
+After EVERY action, report in TWO places:
+1. **Terminal**: Print text for the user
+2. **Godot dock**: Call `godot_log` so the Godot editor panel shows activity
 
-NEVER write files silently. The user must see constant progress.
+```
+godot_log("Reloading Godot filesystem...")
+godot_log("Running game... checking for errors...")
+godot_log("Found 2 errors. Fixing scripts/player.gd line 34...")
+godot_log("Game running. 0 errors. Phase 1 complete.")
+```
+
+NEVER write files silently. Call `godot_log` BEFORE and AFTER every action. The more calls the better — the user wants to see constant activity in the Godot dock panel.
 
 ## The Core Loop
 
@@ -93,6 +98,13 @@ Read from project.godot:
 ```json
 {"key": "application/run/main_scene"}
 ```
+
+### godot_log
+Send a message to the Godot dock panel. Call this CONSTANTLY for user visibility:
+```json
+{"message": "Writing scripts/player.gd — WASD movement..."}
+```
+Call BEFORE and AFTER every file write, every test, every error fix. Sub-agents should prefix with their name: `"[Agent: enemies] Writing enemy.gd..."`
 
 ## Error Resolution Patterns
 

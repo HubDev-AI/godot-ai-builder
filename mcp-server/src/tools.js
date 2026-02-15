@@ -154,6 +154,22 @@ export const TOOL_DEFINITIONS = [
       required: ["key"],
     },
   },
+  {
+    name: "godot_log",
+    description:
+      "Send a message to the AI Game Builder dock panel in the Godot editor. Use this to report progress, phase changes, file writes, and status updates so the user can see activity in real-time. Call this frequently — after writing files, before/after running scenes, when starting/finishing phases, etc.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description:
+            "Message to display in the Godot dock panel. Examples: 'Writing scripts/player.gd — WASD movement...', 'Phase 2 complete. 5/5 gates passed.', 'Fixing error in main.gd line 15...'",
+        },
+      },
+      required: ["message"],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -179,6 +195,8 @@ export async function handleToolCall(name, args) {
       return await toolScanProjectFiles(args.extensions);
     case "godot_read_project_setting":
       return await toolReadProjectSetting(args.key);
+    case "godot_log":
+      return await toolLog(args.message);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -189,6 +207,7 @@ export async function handleToolCall(name, args) {
 // ---------------------------------------------------------------------------
 
 async function toolGetProjectState() {
+  await bridge.sendLog("[MCP] Getting project state...");
   const connected = await bridge.isConnected();
   const files = await scanDir(PROJECT_PATH, [
     "gd",
@@ -224,37 +243,56 @@ async function toolGetProjectState() {
     }
   }
 
+  await bridge.sendLog(`[MCP] Project: ${result.project_name} — ${files.length} files, editor ${connected ? "connected" : "offline"}`);
   return result;
 }
 
 async function toolRunScene(scenePath) {
+  await bridge.sendLog(`[MCP] Running ${scenePath || "main scene"}...`);
   return await bridge.runScene(scenePath);
 }
 
 async function toolStopScene() {
+  await bridge.sendLog("[MCP] Stopping scene...");
   return await bridge.stopScene();
 }
 
 async function toolGetErrors() {
-  return await bridge.getErrors();
+  await bridge.sendLog("[MCP] Checking for errors...");
+  const result = await bridge.getErrors();
+  const errCount = result.errors?.length || 0;
+  const warnCount = result.warnings?.length || 0;
+  await bridge.sendLog(`[MCP] Errors: ${errCount}, Warnings: ${warnCount}`);
+  return result;
 }
 
 async function toolReloadFilesystem() {
+  await bridge.sendLog("[MCP] Reloading filesystem...");
   return await bridge.reloadFilesystem();
 }
 
 async function toolParseScene(scenePath) {
-  return await parseScene(scenePath);
+  await bridge.sendLog(`[MCP] Parsing scene: ${scenePath}`);
+  const result = await parseScene(scenePath);
+  await bridge.sendLog(`[MCP] Scene parsed: ${scenePath}`);
+  return result;
 }
 
 async function toolGenerateAsset(args) {
+  const fmt = args.format || "svg";
+  await bridge.sendLog(`[MCP] Generating ${fmt} asset: ${args.name} (${args.type})`);
+  let result;
   if (args.format === "png") {
-    return await generatePng(args);
+    result = await generatePng(args);
+  } else {
+    result = await generatePlaceholder(args);
   }
-  return await generatePlaceholder(args);
+  await bridge.sendLog(`[MCP] Asset created: ${args.name}.${fmt}`);
+  return result;
 }
 
 async function toolScanProjectFiles(extensions) {
+  await bridge.sendLog("[MCP] Scanning project files...");
   const exts = extensions || [
     "gd",
     "tscn",
@@ -265,6 +303,7 @@ async function toolScanProjectFiles(extensions) {
     "wav",
   ];
   const files = await scanDir(PROJECT_PATH, exts);
+  await bridge.sendLog(`[MCP] Found ${files.length} project files`);
   return {
     project_path: resolve(PROJECT_PATH),
     total: files.length,
@@ -273,12 +312,18 @@ async function toolScanProjectFiles(extensions) {
 }
 
 async function toolReadProjectSetting(key) {
+  await bridge.sendLog(`[MCP] Reading setting: ${key}`);
   const settings = await readProjectGodot();
   const value = settings[key];
   if (value === undefined) {
     return { key, found: false, value: null };
   }
   return { key, found: true, value };
+}
+
+async function toolLog(message) {
+  await bridge.sendLog(message);
+  return { ok: true, message };
 }
 
 // ---------------------------------------------------------------------------

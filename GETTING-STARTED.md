@@ -244,7 +244,9 @@ While Claude is working, you'll see activity in two places:
 - Asks for your input if needed (e.g., PRD approval)
 
 **In the Godot editor (AI Game Builder dock):**
+- Shows real-time progress messages: file writes, phase transitions, error fixes
 - Shows bridge activity (reload, run, error check commands)
+- When Claude spawns sub-agents, each agent logs its progress to the dock too
 - The game runs automatically in the editor when Claude tests it
 - You can see the game come to life in real-time
 

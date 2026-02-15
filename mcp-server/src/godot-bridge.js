@@ -65,6 +65,14 @@ export async function reloadFilesystem() {
   return bridgeRequest("POST", "/reload");
 }
 
+export async function sendLog(message) {
+  try {
+    await bridgeRequest("POST", "/log", { message });
+  } catch {
+    // Logging is best-effort — don't fail tools if dock is unavailable
+  }
+}
+
 export async function isConnected() {
   try {
     await getStatus();

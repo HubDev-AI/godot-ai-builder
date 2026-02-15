@@ -92,6 +92,7 @@ Create a 2D top-down shooter with enemies, health, and score
 | `godot_parse_scene` | Parse .tscn file structure |
 | `godot_scan_project_files` | List all project files |
 | `godot_read_project_setting` | Read project.godot values |
+| `godot_log` | Send progress messages to the Godot dock panel |
 
 ### Hooks
 
