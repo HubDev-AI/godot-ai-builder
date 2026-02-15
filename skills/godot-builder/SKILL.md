@@ -18,11 +18,36 @@ description: |
 
 | User says | You do | You NEVER do |
 |-----------|--------|-------------|
-| "web game" / "browser game" / "for web" | Build a **Godot game** with HTML5 export preset in `export_presets.cfg` | Create an HTML/JS/TS project |
-| "mobile game" / "for mobile" | Build a **Godot game** with touch input + mobile export preset | Create a React Native/Flutter app |
+| "web game" / "browser game" / "for web" | Build a **Godot game** with web viewport settings (see below) | Create an HTML/JS/TS project |
+| "mobile game" / "for mobile" | Build a **Godot game** with mobile viewport settings (see below) | Create a React Native/Flutter app |
 | "game" (any kind) | Build a **Godot game** using GDScript + Godot nodes | Create anything non-Godot |
 
-The platform (web/mobile/desktop) ONLY affects `project.godot` settings and `export_presets.cfg`. The game code is ALWAYS GDScript. There are NO exceptions to this rule.
+The platform (web/mobile/desktop) ONLY affects `project.godot` settings. The game code is ALWAYS GDScript. There are NO exceptions to this rule.
+
+### Platform-Specific project.godot Settings
+
+**Web / Desktop (default):**
+```ini
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+```
+Use large fonts (24-48px for titles, 16-20px for body), large buttons (min 200x50px), and layouts designed for landscape 16:9 screens.
+
+**Mobile:**
+```ini
+[display]
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_width"
+window/handheld/orientation=1
+```
+Use touch-friendly buttons (min 44x44px), portrait layout, larger tap targets.
+
+**IMPORTANT:** If the game design docs were originally written for mobile (small viewport, portrait layout) but the user says "for web" — OVERRIDE the docs. Use the web settings above. Scale up all UI elements accordingly.
 
 **The current working directory IS the Godot project. `project.godot` already exists here. The Godot editor is already open. Write files directly here — NEVER create a subfolder for a "different kind of project".**
 

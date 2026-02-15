@@ -18,11 +18,35 @@ description: |
 
 | User says | You do | You NEVER do |
 |-----------|--------|-------------|
-| "web game" / "browser game" / "for web" | Build a **Godot game** with HTML5 export preset in `export_presets.cfg` | Create an HTML/JS/TS project |
-| "mobile game" / "for mobile" | Build a **Godot game** with touch input + mobile export preset | Create a React Native/Flutter app |
+| "web game" / "browser game" / "for web" | Build a **Godot game** with web viewport (1280x720, canvas_items stretch) | Create an HTML/JS/TS project |
+| "mobile game" / "for mobile" | Build a **Godot game** with mobile viewport (390x844, portrait) | Create a React Native/Flutter app |
 | "game" (any kind) | Build a **Godot game** using GDScript + Godot nodes | Create anything non-Godot |
 
-The platform (web/mobile/desktop) ONLY affects `project.godot` settings and `export_presets.cfg`. The game code is ALWAYS GDScript.
+The platform (web/mobile/desktop) ONLY affects `project.godot` settings. The game code is ALWAYS GDScript.
+
+### Platform-Specific project.godot Settings (SET THESE IN PHASE 1)
+
+**Web / Desktop:**
+```ini
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+```
+Use large fonts (24-48px titles, 16-20px body), large buttons (min 200x50px), 16:9 landscape layouts.
+
+**Mobile:**
+```ini
+[display]
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_width"
+window/handheld/orientation=1
+```
+
+**IMPORTANT:** If the design docs were written for mobile but the user says "for web" — OVERRIDE the docs. Use web settings. Scale up ALL UI.
 
 **The Godot project ALREADY EXISTS in the current working directory. `project.godot` is already here. The Godot editor is already open with the plugin enabled. Write scripts, scenes, and assets directly into the existing project. NEVER create a new project folder.**
 
