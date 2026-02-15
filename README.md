@@ -113,9 +113,20 @@ Each phase has quality gates. Claude won't proceed until they pass.
 
 ## Example Prompts
 
+### From a prompt
 ```
 "Create a 2D platformer with wall-jumping, coins, and 3 levels"
 "Make a tower defense game with 3 tower types and wave progression"
+```
+
+### From a design folder
+```
+"Build the game from the docs in ~/my-game-design/"
+"Take this folder ~/rpg-project/ and start working on this game"
+```
+
+### Feature additions
+```
 "Add a boss enemy that shoots in patterns"
 "Make the game look more polished — add particles and screen shake"
 "Fix the errors and run the game"

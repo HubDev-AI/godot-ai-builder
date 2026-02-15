@@ -154,36 +154,58 @@ Claude Code starts with full awareness of:
 
 ## Step 6: Tell Claude to Build Your Game
 
-Type a game prompt. Here are some examples:
+You have two ways to start:
 
-### Simple (good for first try)
+### Option A: Type a prompt
+
+Tell Claude what game you want in plain English:
+
 ```
 Create a top-down shooter where I move with WASD, aim with mouse,
 and shoot enemies that chase me. Keep score.
 ```
 
-### Medium complexity
 ```
-Build a 2D platformer with a player that can jump and double-jump,
-coins to collect, spikes that kill you, and 3 levels of increasing
-difficulty. Include a main menu and game over screen.
+Build a 2D platformer with double-jump, coins, spikes, and 3 levels.
+Include a main menu and game over screen.
 ```
 
-### Full game request
 ```
-Create a complete tower defense game with:
-- A winding path that enemies follow
-- 3 tower types (basic, splash, slow)
-- Wave system with 10 waves of increasing difficulty
-- Gold economy (earn from kills, spend on towers)
-- Lives system (enemies reaching the end cost lives)
-- Full UI: main menu, HUD with gold/lives/wave, game over
-- Polish: particles, screen shake, smooth animations
+Create a complete tower defense game with 3 tower types, 10 waves,
+gold economy, lives system, full UI, and polish.
 ```
+
+### Option B: Point to a folder with game design documents
+
+If you already have a game design document (GDD), feature list, art references,
+level designs, or any planning docs — put them all in a folder and tell Claude:
+
+```
+Build the game from the docs in ~/my-game-design/
+```
+
+```
+Take the folder ~/desktop/rpg-project/ and start working on this game.
+```
+
+```
+Read all the documents in ./game-plan/ and build this game in Godot.
+```
+
+Claude will:
+1. Scan every file in the folder (`.md`, `.txt`, `.pdf`, `.json`, images, etc.)
+2. Read each document and report what it found
+3. Generate a PRD from your documents
+4. Ask for your approval
+5. Build the game phase by phase
+
+This is powerful for complex games — prepare your design offline, then let Claude build it.
 
 ---
 
 ## What Happens Next
+
+> **Note about the MCP server**: You don't need to start it manually. Claude Code automatically launches the MCP server (Node.js process) when the plugin loads. The server bridges Claude Code to the Godot editor via HTTP on port 6100. Just make sure Godot is open with the plugin enabled.
 
 Claude follows the **Game Director** protocol — a 6-phase build process:
 

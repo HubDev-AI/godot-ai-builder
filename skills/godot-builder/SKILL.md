@@ -121,6 +121,13 @@ Detailed references are in the plugin's `knowledge/` directory:
 If the user asks to **create a complete game** (not just a feature), load `godot-director` FIRST.
 The Director handles: PRD generation → phased build → quality gates → polish.
 
+### 0b. Build From Documents → Use Director (Mode B)
+If the user provides a **folder or files** with game design documents ("use this folder",
+"here are my docs", "build from this GDD", "take these files and build the game"):
+1. Load `godot-director`
+2. The Director reads all documents, extracts the game spec, generates a PRD
+3. Then proceeds through phases 1-6 as normal
+
 ### 1. Understand the Request
 Parse the user's prompt to determine:
 - **Genre**: shooter, platformer, puzzle, RPG, strategy, sandbox, custom
@@ -139,6 +146,7 @@ ALWAYS call `godot_get_project_state` first to check:
 |---|---|
 | "Create/build a complete game" | `godot-director` (handles everything) |
 | "Create a new game" | `godot-director` → phases 0-6 |
+| "Build from these docs/folder" | `godot-director` (Mode B: reads docs first) |
 | "Add enemies" | `godot-enemies` → `godot-physics` |
 | "Add UI / menu" | `godot-ui` |
 | "Add sound / effects" | `godot-effects` |

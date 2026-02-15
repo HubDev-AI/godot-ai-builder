@@ -7,6 +7,7 @@ description: |
   Use this as THE entry point for "build me a complete game". This skill orchestrates
   ALL other skills and can spawn sub-agents for parallel work.
   Triggers on: "create a game", "build a complete game", "make a playable game",
+  "build from these docs", "use this game plan", "here's my GDD",
   or any request that implies a full game rather than a single feature.
 ---
 
@@ -18,7 +19,46 @@ playable game — not a prototype.
 
 ## PHASE 0: Discovery & PRD
 
-Before writing ANY code, generate a complete PRD. Write it to `docs/PRD.md` in the project.
+### Mode A: User provides a prompt (no documents)
+Generate a complete PRD from scratch. Write it to `docs/PRD.md` in the project.
+
+### Mode B: User provides a folder/files with game design documents
+If the user says "use this folder", "here are my docs", "build from this GDD", or provides
+any game design documents (GDD, PRD, design docs, feature lists, wireframes, etc.):
+
+1. **Scan the entire folder recursively**: Use Glob to find ALL documents, then Read each one
+   ```
+   Glob: **/*.md, **/*.txt, **/*.pdf, **/*.docx, **/*.json, **/*.yaml, **/*.yml
+   Also check: **/*.png, **/*.jpg (art references / mockups / wireframes)
+   ```
+   - Read EVERY text document thoroughly — there may be many files
+   - For images: note them as art references
+   - For JSON/YAML: these may be data definitions (items, enemies, levels)
+   - Report each file as you read it: "Reading docs/enemies.md — enemy type definitions..."
+2. **Extract the game spec**: From the documents, identify:
+   - Genre, core loop, win/lose conditions
+   - Player mechanics, enemy types, level structure
+   - UI screens, progression system, scoring
+   - Visual style, color palette, art direction
+   - Any specific technical requirements
+3. **Generate the PRD**: Write `docs/PRD.md` using the template below, filling in details
+   from the user's documents. Where the documents are vague, make reasonable decisions
+   and note them.
+4. **Report what you found**: Tell the user:
+   ```
+   Read X documents from [folder]:
+   - [filename]: [what it contained]
+   - [filename]: [what it contained]
+
+   Generated PRD based on your documents. Key decisions I made:
+   - [decision]: [why]
+
+   Please review docs/PRD.md before I start building.
+   ```
+5. **Wait for approval** before proceeding to Phase 1.
+
+This means the user can prepare a complete game design offline, drop it in a folder,
+and say: "Build this game from the docs in ~/my-game-design/"
 
 ### PRD Template
 
