@@ -6,6 +6,7 @@ extends RefCounted
 
 var _errors: Array[Dictionary] = []
 var _warnings: Array[Dictionary] = []
+var _log_baseline_size: Dictionary = {}  # log_path -> file size at plugin load
 
 
 func get_errors() -> Array[Dictionary]:
@@ -117,7 +118,8 @@ func _find_scripts(path: String, results: Array[String]) -> void:
 # ---------------------------------------------------------------------------
 
 func _scan_log_files():
-	# Try the project's log file
+	# Only scan logs from the current editor session to avoid stale errors.
+	# Use the project's log file (most relevant) and filter by recency.
 	_parse_log_file("user://logs/godot.log")
 
 	# Also try common editor log locations (macOS / Linux / Windows)
@@ -139,10 +141,21 @@ func _parse_log_file(log_path: String):
 	if file == null:
 		return
 
-	# Read last 50KB of log to find recent errors
 	var file_size = file.get_length()
-	var read_from = maxi(0, file_size - 51200)
-	file.seek(read_from)
+
+	# Record baseline size on first access — only read NEW log entries
+	if not _log_baseline_size.has(log_path):
+		_log_baseline_size[log_path] = file_size
+		file.close()
+		return  # Skip all pre-existing log content on first run
+
+	var baseline = _log_baseline_size[log_path]
+	if file_size <= baseline:
+		file.close()
+		return  # No new content since baseline
+
+	# Only read bytes written since plugin loaded
+	file.seek(baseline)
 	var content = file.get_as_text()
 	file.close()
 
