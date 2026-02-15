@@ -8,6 +8,7 @@ var http_bridge: Node  # http_bridge.gd
 
 var _all_messages: Array[Dictionary] = []
 var _current_filter: String = "all"  # "all", "errors", "progress"
+var _seen_error_keys: Dictionary = {}  # track errors already added to log
 
 
 func _ready():
@@ -127,6 +128,17 @@ func _poll_errors():
 	var err_count = errors.size()
 	var warn_count = warnings.size()
 
+	# Inject new errors into the log so the Errors tab shows them
+	for err in errors:
+		var key = err.get("file", "") + "|" + err.get("message", "").left(80)
+		if not _seen_error_keys.has(key):
+			_seen_error_keys[key] = true
+			var msg = err.get("message", "Unknown error")
+			var file = err.get("file", "")
+			if not file.is_empty():
+				msg = "%s — %s" % [file, msg]
+			_log(msg, "error")
+
 	$ErrorSection/ErrorBadge.text = str(err_count)
 	$ErrorSection/WarnBadge.text = str(warn_count)
 
@@ -162,6 +174,7 @@ func _refresh_log():
 
 func _on_clear_pressed():
 	_all_messages.clear()
+	_seen_error_keys.clear()
 	$LogOutput.text = ""
 
 
