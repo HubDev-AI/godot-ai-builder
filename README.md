@@ -53,10 +53,12 @@ cd /path/to/your/godot/project
 claude --plugin-dir /path/to/godot-ai-builder
 ```
 
-Then tell Claude:
+Then tell Claude what you want:
 ```
-Create a 2D top-down shooter with enemies, health, and score
+Make a shooter game
 ```
+
+Claude will ask whether you want a **full game** (6-phase build with PRD, enemies, UI, polish) or a **simple game** (minimal, fast, playable). Give a detailed prompt to skip the question and go straight to building.
 
 ## Plugin Contents
 
@@ -158,7 +160,7 @@ godot-ai-builder/
 ├── mcp-server/                # Node.js MCP bridge
 │   ├── index.js
 │   └── src/
-│       ├── tools.js           # 9 MCP tool definitions
+│       ├── tools.js           # 10 MCP tool definitions
 │       ├── godot-bridge.js    # HTTP client -> Godot
 │       ├── scene-parser.js    # .tscn parser
 │       └── asset-generator.js # SVG/PNG generator

@@ -118,7 +118,8 @@ Installing knowledge base...
 
 You should see a new **"AI Game Builder"** panel appear in the bottom dock. It shows:
 - A green dot when the HTTP bridge is active (port 6100)
-- A log of all commands received from Claude Code
+- Real-time progress log: file writes, phase transitions, error fixes, and all MCP operations
+- When Claude spawns sub-agents for parallel work, each agent's progress shows here too
 
 > **Important**: Keep Godot open. Claude Code communicates with it in real-time through the plugin.
 
@@ -154,20 +155,38 @@ Claude Code starts with full awareness of:
 
 ## Step 6: Tell Claude to Build Your Game
 
-You have two ways to start:
+You have three ways to start:
 
-### Option A: Type a prompt
+### Option A: Type a short prompt
 
-Tell Claude what game you want in plain English:
+Give Claude a brief idea and it will ask you to choose scope:
+
+```
+Make a shooter game
+```
+
+```
+Create a platformer
+```
+
+Claude will respond:
+
+> I can build this two ways:
+>
+> **A) Full game** — I'll design everything: multiple enemy types, UI screens, progressive difficulty, visual polish. I'll write a PRD for your approval first.
+>
+> **B) Simple game** — Minimal and focused. Basic player, basic gameplay, just enough to be playable. Fast to build, easy to extend later.
+>
+> Which would you prefer?
+
+### Option B: Type a detailed prompt
+
+If you include enough detail (3+ features, enemy types, UI screens, etc.), Claude skips the question and goes straight to building:
 
 ```
 Create a top-down shooter where I move with WASD, aim with mouse,
-and shoot enemies that chase me. Keep score.
-```
-
-```
-Build a 2D platformer with double-jump, coins, spikes, and 3 levels.
-Include a main menu and game over screen.
+and shoot enemies that chase me. Include a main menu, HUD with health
+and score, game over screen, 2 enemy types, and visual polish.
 ```
 
 ```
@@ -175,7 +194,7 @@ Create a complete tower defense game with 3 tower types, 10 waves,
 gold economy, lives system, full UI, and polish.
 ```
 
-### Option B: Point to a folder with game design documents
+### Option C: Point to a folder with game design documents
 
 If you already have a game design document (GDD), feature list, art references,
 level designs, or any planning docs — put them all in a folder and tell Claude:
@@ -207,27 +226,35 @@ This is powerful for complex games — prepare your design offline, then let Cla
 
 > **Note about the MCP server**: You don't need to start it manually. Claude Code automatically launches the MCP server (Node.js process) when the plugin loads. The server bridges Claude Code to the Godot editor via HTTP on port 6100. Just make sure Godot is open with the plugin enabled.
 
+### If you chose "Simple game"
+
+Claude builds directly — no PRD, no phases. It writes the minimum files needed (player, main scene, basic gameplay), runs the game, fixes any errors, and you're done. Fast and focused.
+
+You can always extend later: "Add enemies", "Add a menu", "Make it look better".
+
+### If you chose "Full game" (or gave a detailed prompt / docs folder)
+
 Claude follows the **Game Director** protocol — a 6-phase build process:
 
-### Phase 0: PRD (Product Requirements Document)
+#### Phase 0: PRD (Product Requirements Document)
 Claude writes a detailed game design doc and asks for your approval before writing any code.
 
-### Phase 1: Foundation
+#### Phase 1: Foundation
 Creates the project structure, player movement, camera, and background. Runs the game to verify it works.
 
-### Phase 2: Player Abilities
+#### Phase 2: Player Abilities
 Adds shooting, jumping, or whatever the player's actions are. Tests everything.
 
-### Phase 3: Enemies & Challenges
+#### Phase 3: Enemies & Challenges
 Creates enemy types, spawn systems, collision, health, scoring, and difficulty ramping.
 
-### Phase 4: UI & Game Flow
+#### Phase 4: UI & Game Flow
 Builds the main menu, HUD, game over screen, pause menu, and screen transitions. Wires up the full game loop: menu → play → die → retry.
 
-### Phase 5: Polish
+#### Phase 5: Polish
 Adds game "juice" — screen shake, hit flash, death particles, spawn animations, floating score numbers, smooth camera, and visual effects.
 
-### Phase 6: Final QA
+#### Phase 6: Final QA
 Runs the game multiple times, checks for errors, edge cases, and memory leaks. Reports the final status.
 
 **The Stop hook keeps Claude locked in until all 6 phases are complete.** You don't need to worry about it quitting halfway through.
@@ -329,7 +356,9 @@ The skills instruct Claude to report progress. If it's not doing so:
 
 | Action | How |
 |--------|-----|
-| Build a complete game | "Create a [genre] game with [features]" |
+| Quick simple game | "Make a shooter" → choose "Simple" |
+| Full polished game | "Make a shooter" → choose "Full", or give a detailed prompt |
+| Build from docs | "Build the game from the docs in ~/folder/" |
 | Add a feature | "Add enemies that shoot back" |
 | Fix errors | "Fix the errors" or "Check for errors and fix them" |
 | Polish the game | "Add screen shake, particles, and juice" |
