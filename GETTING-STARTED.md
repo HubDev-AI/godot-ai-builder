@@ -26,13 +26,19 @@ claude --version     # Should show the Claude Code version
 
 ## Step 1: Get the AI Game Builder
 
-Clone or download the AI Game Builder to your machine:
-
+### Option A: Clone from GitHub (when available)
 ```bash
-git clone <your-repo-url> ~/ai-game-builder
+git clone https://github.com/your-username/godot-ai-builder.git ~/ai-game-builder
 ```
 
-Or if you received it as a zip, unzip it anywhere you like. This is a **Claude Code plugin** — it contains skills, hooks, MCP config, and more:
+### Option B: Use a local copy
+If you already have the folder (e.g., you built it yourself or received it as a zip):
+```bash
+# Just note where it lives, e.g.:
+ls ~/ai-game-builder     # or wherever you put it
+```
+
+The folder is a **Claude Code plugin** — it contains skills, hooks, MCP config, and more:
 
 ```
 ai-game-builder/
@@ -120,6 +126,8 @@ You should see a new **"AI Game Builder"** panel appear in the bottom dock. It s
 
 ## Step 5: Open Claude Code with the Plugin
 
+**This is the critical step.** You MUST load the plugin when starting Claude Code, otherwise the MCP tools and skills won't be available.
+
 Open a new terminal and navigate to your Godot project:
 
 ```bash
@@ -127,12 +135,19 @@ cd ~/games/my-first-game
 claude --plugin-dir ~/ai-game-builder
 ```
 
-> **Alternative**: If you installed via marketplace (`/plugin install godot-ai-builder`), just run `claude` — the plugin loads automatically.
+> **`--plugin-dir` is required for local usage.** It tells Claude Code to load the AI Game Builder plugin from your local folder. Without it, Claude won't have the MCP tools to talk to Godot.
+>
+> **Alternative**: If you installed via marketplace (`/plugin install godot-ai-builder`), the plugin loads automatically and you can just run `claude`.
+
+**How to verify the plugin is loaded:** After Claude starts, you can check:
+- Skills show up when you type `/godot-ai-builder:` (tab completion)
+- Claude mentions MCP tools like `godot_get_project_state` when you ask it to build something
+- If Claude uses `curl http://localhost:6100/...` instead of MCP tools, the plugin is NOT loaded — restart with `--plugin-dir`
 
 Claude Code starts with full awareness of:
 - The Godot project structure
-- All 14 game generation skills
-- The MCP tools to control the Godot editor
+- All 14 game generation skills (namespaced as `/godot-ai-builder:godot-*`)
+- MCP tools to control the Godot editor (reload, run, errors, assets)
 - The Stop hook that keeps it focused during builds
 
 ---
@@ -247,10 +262,25 @@ my-first-game/
 
 ## Troubleshooting
 
+### Claude uses `curl` instead of MCP tools (MOST COMMON ISSUE)
+This means the plugin wasn't loaded. Claude is bypassing the MCP bridge and hitting port 6100 directly.
+- **Fix**: Restart Claude with the plugin flag: `claude --plugin-dir ~/ai-game-builder`
+- **Verify**: Ask Claude "what MCP tools do you have?" — it should list `godot_get_project_state`, `godot_run_scene`, etc.
+
+### Claude writes files silently (no progress output)
+The skills instruct Claude to report progress. If it's not doing so:
+- Tell Claude: "Report every file you write and every action you take. I want to see progress."
+- Or invoke the Director skill explicitly: `/godot-ai-builder:godot-director`
+
 ### "Godot bridge not connected"
 - Make sure the Godot editor is open with your project
 - Check that the AI Game Builder plugin is enabled (Project → Project Settings → Plugins)
 - The plugin runs an HTTP server on port 6100 — make sure nothing else uses that port
+
+### Game breaks after project.godot edit
+- Claude may accidentally strip sections from project.godot (like `[autoload]`)
+- **Fix**: Tell Claude "Check project.godot — make sure the [autoload] section is intact"
+- The skills now instruct Claude to ALWAYS read project.godot before editing it
 
 ### "No project.godot found"
 - Run setup.sh with the path to a valid Godot project (the folder containing `project.godot`)
@@ -259,7 +289,7 @@ my-first-game/
 ### Claude stops unexpectedly
 - If Claude hits a rate limit, wait a moment and type "continue" — it will resume
 - If the build lock is stuck, manually remove it: `rm .claude/.build_in_progress`
-- Re-run Claude with `claude` and tell it to continue the build
+- Re-run Claude with `claude --plugin-dir ~/ai-game-builder` and tell it to continue
 
 ### Game has errors after build
 - Open Claude Code and say: "Fix the errors in my game"

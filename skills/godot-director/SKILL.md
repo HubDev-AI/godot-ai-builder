@@ -284,7 +284,7 @@ When executing, ALWAYS:
    ```bash
    echo "Phase N: <name>" > .claude/.build_in_progress
    ```
-4. Run `godot_reload` → `godot_run` → `godot_get_errors` after EACH phase
+4. **Use MCP tools** — call `godot_reload_filesystem` → `godot_run_scene` → `godot_get_errors` after EACH phase. NEVER use raw curl.
 5. Fix all errors before moving to next phase
 6. Report progress: "Phase X complete. Y/Z quality gates passed."
 7. If a quality gate fails, fix it before proceeding
@@ -293,6 +293,38 @@ When executing, ALWAYS:
    ```bash
    rm .claude/.build_in_progress
    ```
+
+## PROGRESS REPORTING (MANDATORY)
+
+You MUST print progress after EVERY action. The user should NEVER wonder what's happening.
+
+**Per file**: Report each file as you write it:
+```
+Writing scripts/player.gd — WASD movement, mouse aim, shooting (layer 1, mask 4)...
+Writing scripts/enemy.gd — Chase AI at 90px/s, 30 HP, death particles...
+Writing scripts/main.gd — Game loop: spawn timer 1.5s, score tracking, health 100...
+```
+
+**Per phase**: Report completion with gate results:
+```
+--- Phase 1: Foundation ---
+Created: player.gd, main.gd, project.godot
+Reloading filesystem... done.
+Running game... 0 errors.
+Quality gates: 5/5 passed
+  [x] Player moves smoothly
+  [x] Camera follows player
+  [x] No errors in console
+  [x] Background fills visible area
+  [x] Player has visible shape
+Moving to Phase 2.
+```
+
+**Per error fix**: Report the error and the fix:
+```
+ERROR: "Identifier 'GameManager' not declared" in scripts/main.gd:15
+FIX: GameManager autoload missing from project.godot. Adding [autoload] section...
+```
 
 **IMPORTANT**: The Stop hook will prevent Claude from finishing while `.claude/.build_in_progress` exists. If the user explicitly asks to cancel, remove the file before stopping.
 

@@ -4,13 +4,32 @@ description: |
   MCP tool operations: run game, read errors, reload filesystem, iterate fixes.
   Use when testing, debugging, or running the build-test-fix loop.
   This is the "DevOps" skill for AI game generation.
+  CRITICAL: Always use MCP tools, never raw curl. Always report progress.
 ---
 
 # Operations — Build, Run, Fix Loop
 
+## RULE: Always Use MCP Tools
+
+Use `godot_reload_filesystem`, `godot_run_scene`, `godot_get_errors`, etc.
+**NEVER use raw `curl http://localhost:6100/...`** — that bypasses MCP and means the plugin isn't loaded.
+
+If MCP tools aren't available, stop and tell the user:
+> "MCP tools not available. Start Claude Code with: `claude --plugin-dir /path/to/godot-ai-builder`"
+
+## RULE: Always Report Progress
+
+After EVERY action, tell the user what happened:
+- "Reloading Godot filesystem..."
+- "Running game... checking for errors..."
+- "Found 2 errors. Fixing scripts/player.gd line 34..."
+- "Game running. 0 errors. Phase 1 complete."
+
+NEVER write files silently. The user must see constant progress.
+
 ## The Core Loop
 
-After writing game files, ALWAYS execute this loop:
+After writing ANY game files, ALWAYS execute this loop immediately:
 
 ```
 1. godot_reload_filesystem    → Editor sees new files
