@@ -28,6 +28,10 @@ ask the user before generating a PRD:
 
 > This will be a full game build with PRD, 6 phases, enemies, UI, and polish. Is that what you want, or would you prefer a simpler, minimal version?
 
+## PRE-FLIGHT CHECK (BEFORE ANYTHING ELSE)
+
+Call `godot_get_project_state()`. If `editor_connected` is `false`, STOP and tell the user to open the Godot editor and enable the AI Game Builder plugin. Do NOT write any files until the editor is connected.
+
 ## SESSION RESUMPTION
 
 At the START of every build session, check for an interrupted build:

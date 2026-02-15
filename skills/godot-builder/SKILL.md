@@ -48,12 +48,28 @@ The workflow is:
 - Write files to `scripts/`, `scenes/`, `assets/` etc. in the **current directory**
 - **NEVER** `mkdir` a new project folder or run `godot --create-project`
 
+## MANDATORY: Pre-Flight Check (Do This FIRST)
+
+**Before starting ANY work, verify the Godot editor plugin is running:**
+
+1. Call `godot_get_project_state()`
+2. Check the `editor_connected` field in the response
+3. **If `editor_connected` is `false`**: STOP and tell the user:
+   > The Godot editor plugin is not responding. Please make sure:
+   > 1. The Godot editor is open with your project
+   > 2. The AI Game Builder plugin is enabled (Project → Project Settings → Plugins → Enable "AI Game Builder")
+   > 3. You see the "AI Game Builder" dock panel in the editor
+   >
+   > Tell me when it's ready and I'll start building.
+4. **Do NOT proceed with any file writes, scene creation, or game building until `editor_connected` is `true`.**
+5. If the user says it's ready, call `godot_get_project_state()` again to confirm.
+
 ## MANDATORY: Use MCP Tools (Never Raw curl)
 
 You have MCP tools that talk to the Godot editor. **ALWAYS use them. NEVER use raw curl to port 6100.**
 
 Available MCP tools:
-- `godot_get_project_state` — Read project structure (call FIRST)
+- `godot_get_project_state` — Read project structure **(call FIRST — also serves as connectivity check)**
 - `godot_reload_filesystem` — Tell editor to rescan (call after EVERY file write)
 - `godot_run_scene` — Run the game in the editor
 - `godot_stop_scene` — Stop the running game
