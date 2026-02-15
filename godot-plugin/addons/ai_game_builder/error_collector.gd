@@ -58,28 +58,31 @@ func _refresh():
 func _validate_all_scripts():
 	var scripts: Array[String] = []
 	_find_scripts("res://", scripts)
+
+	# Two-pass validation: first load all scripts to populate the class_name
+	# cache, then check can_instantiate(). Single-pass with CACHE_MODE_REPLACE
+	# breaks class_name resolution because each script is parsed in isolation
+	# before its dependencies are loaded.
+	var loaded: Array[Dictionary] = []
 	for path in scripts:
-		_validate_script(path)
+		var script = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE)
+		if script == null:
+			_errors.append({
+				"message": "Failed to load script (parse error)",
+				"file": path,
+				"line": -1,
+				"timestamp": Time.get_unix_time_from_system(),
+			})
+		else:
+			loaded.append({"path": path, "script": script})
 
-
-func _validate_script(path: String):
-	# Force a fresh load to re-parse the script
-	var script = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REPLACE)
-	if script == null:
-		_errors.append({
-			"message": "Failed to load script (parse error)",
-			"file": path,
-			"line": -1,
-			"timestamp": Time.get_unix_time_from_system(),
-		})
-		return
-
-	if script is GDScript:
-		# can_instantiate() returns false if the script has compilation errors
-		if not script.can_instantiate():
+	# Second pass: check compilation with all class_names now in cache
+	for entry in loaded:
+		var script: GDScript = entry.script as GDScript
+		if script and not script.can_instantiate():
 			_errors.append({
 				"message": "Script has compilation errors",
-				"file": path,
+				"file": entry.path,
 				"line": -1,
 				"timestamp": Time.get_unix_time_from_system(),
 			})
