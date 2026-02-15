@@ -1,0 +1,9 @@
+{
+  "godot-bridge": {
+    "command": "node",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-server/index.js"],
+    "env": {
+      "GODOT_BRIDGE_PORT": "6100"
+    }
+  }
+}

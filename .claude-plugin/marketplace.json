@@ -1,0 +1,12 @@
+{
+  "name": "godot-ai-builder-marketplace",
+  "description": "AI Game Builder plugin marketplace",
+  "plugins": [
+    {
+      "name": "godot-ai-builder",
+      "source": ".",
+      "description": "Generate playable Godot 4 games from natural language prompts using Claude Code + MCP + 14 specialized skills.",
+      "version": "1.0.0"
+    }
+  ]
+}

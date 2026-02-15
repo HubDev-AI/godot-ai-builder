@@ -1,173 +1,167 @@
 # AI Game Builder
 
-Generate playable Godot 4 game prototypes from natural language prompts using Claude Code.
+A Claude Code plugin that generates playable Godot 4 games from natural language prompts.
 
 ## How It Works
 
 ```
 You (natural language prompts)
-    ↓
-Claude Code (writes game code + calls MCP tools)
-    ↓                         ↓
-Writes .gd/.tscn          MCP Server (Node.js)
-directly to disk               ↓
-    ↓                    Godot Plugin (HTTP bridge)
-    ↓                         ↓
+    |
+Claude Code + AI Game Builder plugin
+    |                         |
+Writes .gd/.tscn          MCP Server (godot-bridge)
+directly to disk               |
+    |                    Godot Editor Plugin (HTTP on port 6100)
+    |                         |
 Godot auto-reloads      Run / Stop / Get Errors
 ```
 
-Claude Code is the brain. It writes GDScript and scene files directly, generates placeholder assets, runs the game through the Godot editor, reads errors, and fixes them — all autonomously.
+Claude Code is the brain. The plugin gives it 14 specialized game development skills, MCP tools for editor integration, and a Stop hook that keeps it focused until the build is complete.
 
-## Requirements
+## Install
 
-- **Godot 4.3+** (editor must be open during generation)
-- **Node.js 20+** (for the MCP server)
-- **Claude Code** (Anthropic's CLI)
-
-## Quick Start
+### Step 1: Install the Claude Code plugin
 
 ```bash
-# 1. Clone this repo
-git clone <repo-url> godot-ai-builder
-cd godot-ai-builder
+# Option A — Load directly (for development/testing)
+claude --plugin-dir /path/to/godot-ai-builder
 
-# 2. Run setup pointing to your Godot project
-chmod +x setup.sh
+# Option B — Install from marketplace
+/plugin marketplace add https://github.com/you/godot-ai-builder
+/plugin install godot-ai-builder
+```
+
+### Step 2: Set up the Godot editor plugin
+
+```bash
+cd /path/to/godot-ai-builder
 ./setup.sh /path/to/your/godot/project
+```
 
-# 3. Open Godot → Project Settings → Plugins → Enable "AI Game Builder"
+This copies the HTTP bridge plugin into your Godot project's `addons/` folder and installs MCP dependencies.
 
-# 4. Open Claude Code in your project
+### Step 3: Enable in Godot
+
+1. Open your project in Godot
+2. Project -> Project Settings -> Plugins
+3. Enable "AI Game Builder"
+
+### Step 4: Build a game
+
+```bash
 cd /path/to/your/godot/project
-claude
-
-# 5. Start building
-# "Create a 2D top-down shooter with enemies, health, and score"
+claude --plugin-dir /path/to/godot-ai-builder
 ```
 
-## Manual Setup
-
-If you prefer manual installation:
-
-### 1. Install MCP server
-```bash
-cd mcp-server
-npm install
+Then tell Claude:
+```
+Create a 2D top-down shooter with enemies, health, and score
 ```
 
-### 2. Copy plugin to your Godot project
-```bash
-cp -r godot-plugin/addons/ai_game_builder /path/to/project/addons/
-```
+## Plugin Contents
 
-### 3. Copy knowledge base
-```bash
-cp -r knowledge/ /path/to/project/knowledge/
-cp .claude/CLAUDE.md /path/to/project/.claude/CLAUDE.md
-```
+### 14 Skills
 
-### 4. Configure Claude Code MCP
+| Skill | Purpose |
+|-------|---------|
+| `godot-builder` | Master router — entry point for all requests |
+| `godot-director` | Game Director — 6-phase build protocol with quality gates |
+| `godot-polish` | Game juice — screen shake, particles, hit flash, animations |
+| `godot-init` | Project bootstrapping, folder structure, project.godot |
+| `godot-gdscript` | GDScript syntax, patterns, common mistakes |
+| `godot-scene-arch` | Scene building (programmatic vs .tscn) |
+| `godot-player` | Player controllers for every genre |
+| `godot-enemies` | Enemy AI, spawn systems, boss patterns |
+| `godot-physics` | Collision layers, physics bodies, Area2D triggers |
+| `godot-ui` | UI screens, HUD, menus, transitions |
+| `godot-effects` | Audio, particles, tweens, visual effects |
+| `godot-assets` | SVG/PNG asset generation, procedural visuals |
+| `godot-ops` | MCP tool operations: run, stop, errors, reload |
+| `godot-templates` | Genre-specific templates with file manifests |
 
-Add to your project's `.claude/settings.json`:
-```json
-{
-  "mcpServers": {
-    "godot-ai-builder": {
-      "command": "node",
-      "args": ["/full/path/to/godot-ai-builder/mcp-server/index.js"],
-      "env": {
-        "GODOT_PROJECT_PATH": "/full/path/to/your/godot/project",
-        "GODOT_BRIDGE_PORT": "6100"
-      }
-    }
-  }
-}
-```
+### MCP Tools (via godot-bridge)
 
-### 5. Enable the plugin in Godot
-Project → Project Settings → Plugins → Enable "AI Game Builder"
+| Tool | Purpose |
+|------|---------|
+| `godot_get_project_state` | Read project structure and settings |
+| `godot_run_scene` | Run the game in the editor |
+| `godot_stop_scene` | Stop the running game |
+| `godot_get_errors` | Read editor error log |
+| `godot_reload_filesystem` | Tell Godot to rescan files |
+| `godot_generate_asset` | Generate SVG/PNG placeholder sprites |
+| `godot_parse_scene` | Parse .tscn file structure |
+| `godot_scan_project_files` | List all project files |
+| `godot_read_project_setting` | Read project.godot values |
 
-## What Claude Code Can Do
+### Hooks
 
-| Capability | How |
-|---|---|
-| Read project structure | `godot_get_project_state` MCP tool |
-| Write scripts & scenes | Claude Code's built-in Write tool |
-| Generate placeholder sprites | `godot_generate_asset` MCP tool (SVG/PNG) |
-| Reload editor filesystem | `godot_reload_filesystem` MCP tool |
-| Run the game | `godot_run_scene` MCP tool |
-| Read editor errors | `godot_get_errors` MCP tool |
-| Parse scene files | `godot_parse_scene` MCP tool |
-| Fix errors and re-run | Autonomous iteration loop |
+- **Stop hook** — Prevents Claude from quitting mid-game-build. Automatically engaged when the Director starts a build and released when all 6 phases complete.
+
+## The Director Protocol
+
+When you ask for a complete game, the Director runs a 6-phase build:
+
+1. **Phase 0: PRD** — Writes a detailed game design document for your approval
+2. **Phase 1: Foundation** — Player movement, camera, background
+3. **Phase 2: Abilities** — Shooting, jumping, interactions
+4. **Phase 3: Enemies** — AI, spawning, combat, scoring
+5. **Phase 4: UI** — Menu, HUD, game over, pause, transitions
+6. **Phase 5: Polish** — Screen shake, particles, animations, game feel
+7. **Phase 6: QA** — Error checking, edge cases, final verification
+
+Each phase has quality gates. Claude won't proceed until they pass.
 
 ## Example Prompts
 
 ```
 "Create a 2D platformer with wall-jumping, coins, and 3 levels"
-
-"Add a boss enemy that shoots in patterns"
-
-"Create an inventory system with drag-and-drop"
-
 "Make a tower defense game with 3 tower types and wave progression"
-
-"Add particle effects when enemies die"
-
-"Create a main menu with Start, Settings, and Quit buttons"
-
-"Add save/load functionality using JSON"
+"Add a boss enemy that shoots in patterns"
+"Make the game look more polished — add particles and screen shake"
+"Fix the errors and run the game"
 ```
 
-## Architecture
+## Requirements
+
+- **Godot 4.3+** (editor must be open during generation)
+- **Node.js 20+** (for the MCP server)
+- **Claude Code 1.0.33+** (plugin support required)
+
+## Project Structure
 
 ```
 godot-ai-builder/
-├── .claude/CLAUDE.md           # Makes Claude Code a Godot expert
-├── mcp-server/                 # MCP server (bridges Claude ↔ Godot)
-│   ├── index.js                # Server entry point
+├── .claude-plugin/            # Plugin manifest
+│   ├── plugin.json
+│   └── marketplace.json
+├── skills/                    # 14 game generation skills
+│   ├── godot-builder/         # Master router
+│   ├── godot-director/        # Game Director (6-phase protocol)
+│   ├── godot-polish/          # Game feel & juice
+│   └── ...                    # 11 more specialized skills
+├── hooks/                     # Stop hook (build guard)
+│   ├── hooks.json
+│   └── stop-guard.sh
+├── .mcp.json                  # MCP server configuration
+├── mcp-server/                # Node.js MCP bridge
+│   ├── index.js
 │   └── src/
-│       ├── tools.js            # Tool definitions + handlers
-│       ├── godot-bridge.js     # HTTP client → Godot plugin
-│       ├── scene-parser.js     # .tscn file parser
-│       └── asset-generator.js  # SVG/PNG placeholder generator
-├── godot-plugin/               # Godot editor plugin
+│       ├── tools.js           # 9 MCP tool definitions
+│       ├── godot-bridge.js    # HTTP client -> Godot
+│       ├── scene-parser.js    # .tscn parser
+│       └── asset-generator.js # SVG/PNG generator
+├── godot-plugin/              # Godot editor plugin
 │   └── addons/ai_game_builder/
-│       ├── plugin.gd           # Plugin lifecycle
-│       ├── dock.gd             # Status panel
-│       ├── http_bridge.gd      # HTTP server (port 6100)
-│       ├── error_collector.gd  # Error aggregation
-│       └── project_scanner.gd  # Project file scanner
-├── knowledge/                  # Reference docs for Claude Code
-│   ├── godot4-reference.md     # GDScript + nodes
-│   ├── scene-format.md         # .tscn specification
-│   ├── game-patterns.md        # Genre templates
-│   └── asset-pipeline.md       # Asset creation guide
-├── setup.sh                    # One-command installer
+│       ├── plugin.gd
+│       ├── http_bridge.gd     # HTTP server (port 6100)
+│       ├── dock.gd            # Status panel
+│       ├── error_collector.gd
+│       └── project_scanner.gd
+├── knowledge/                 # Reference docs
+├── setup.sh                   # Godot editor plugin installer
+├── GETTING-STARTED.md         # Full walkthrough guide
 └── README.md
 ```
-
-## The Godot Plugin
-
-The plugin runs an HTTP server on port 6100 inside the Godot editor. The dock panel shows:
-- Bridge connection status
-- Activity log (file writes, scene runs, errors)
-
-The plugin is passive — Claude Code drives all actions through MCP tools.
-
-## Troubleshooting
-
-**"Godot editor not responding"**
-- Make sure the Godot editor is open
-- Check that the AI Game Builder plugin is enabled
-- The HTTP bridge runs on port 6100 — check for port conflicts
-
-**"Cannot connect to MCP server"**
-- Run `node mcp-server/index.js` manually to check for errors
-- Verify `GODOT_PROJECT_PATH` in your Claude settings points to the right directory
-
-**Scene files cause parse errors**
-- Prefer programmatic scene building (scripts that build nodes in `_ready()`)
-- Check `load_steps` count matches actual resources in .tscn files
 
 ## License
 

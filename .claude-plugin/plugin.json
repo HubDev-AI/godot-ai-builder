@@ -1,0 +1,11 @@
+{
+  "name": "godot-ai-builder",
+  "description": "Generate playable Godot 4 games from natural language prompts. Includes 14 specialized skills (director, player, enemies, UI, polish, etc.), MCP tools for editor integration, and a Stop hook that keeps Claude focused until the build is complete.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Vladimir Trifonov"
+  },
+  "repository": "https://github.com/vladimirtrifonov/godot-ai-builder",
+  "license": "MIT",
+  "keywords": ["godot", "game-development", "game-builder", "gdscript", "2d-games"]
+}

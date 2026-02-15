@@ -32,18 +32,18 @@ Clone or download the AI Game Builder to your machine:
 git clone <your-repo-url> ~/ai-game-builder
 ```
 
-Or if you received it as a zip, unzip it anywhere you like. The folder structure looks like this:
+Or if you received it as a zip, unzip it anywhere you like. This is a **Claude Code plugin** — it contains skills, hooks, MCP config, and more:
 
 ```
 ai-game-builder/
-├── .claude/           # Skills (14 game generation skills)
-│   ├── CLAUDE.md      # Claude Code instructions
-│   └── skills/        # godot-builder, godot-director, etc.
-├── godot-plugin/      # Godot editor plugin
+├── .claude-plugin/    # Plugin manifest (makes this a Claude Code plugin)
+├── skills/            # 14 game generation skills
 ├── hooks/             # Stop hook (build guard)
-├── knowledge/         # GDScript reference, patterns, etc.
+├── .mcp.json          # MCP server configuration
 ├── mcp-server/        # MCP bridge (Claude ↔ Godot)
-├── setup.sh           # One-command installer
+├── godot-plugin/      # Godot editor plugin
+├── knowledge/         # GDScript reference, patterns, etc.
+├── setup.sh           # Godot editor plugin installer
 └── README.md
 ```
 
@@ -65,9 +65,9 @@ Godot opens the editor with an empty project. This is fine — Claude will creat
 
 ---
 
-## Step 3: Run the Setup Script
+## Step 3: Install the Godot Editor Plugin
 
-Open your terminal and run:
+The setup script installs the HTTP bridge plugin into your Godot project:
 
 ```bash
 cd ~/ai-game-builder
@@ -76,38 +76,28 @@ cd ~/ai-game-builder
 
 Replace `~/games/my-first-game` with the actual path to your Godot project.
 
-The script installs everything automatically:
-
 ```
 ================================================
-  AI Game Builder — Setup
+  AI Game Builder — Godot Editor Setup
 ================================================
 
 Godot project: /Users/you/games/my-first-game
 
 Installing MCP server dependencies...
 ✓ MCP server ready
-Installing Godot plugin...
+Installing Godot editor plugin...
 ✓ Plugin installed to /Users/you/games/my-first-game/addons/ai_game_builder/
 Installing knowledge base...
 ✓ Knowledge base installed
-Installing Claude Code skills...
-✓ 14 skills installed
-Installing Stop hook...
-✓ Stop hook installed
-Configuring Claude Code MCP...
-✓ MCP + hooks configured
 
 ================================================
-  Setup complete!
+  Godot editor setup complete!
 ================================================
 ```
 
 **What just happened:**
-- The Godot plugin was copied into your project's `addons/` folder
-- 14 Claude Code skills were installed (game director, player, enemies, UI, etc.)
-- A Stop hook was configured to keep Claude focused until the game is done
-- The MCP bridge was configured so Claude can talk to the Godot editor
+- The Godot HTTP bridge plugin was copied into your project's `addons/` folder
+- MCP server dependencies were installed (Node.js)
 - A knowledge base was added with GDScript references and game patterns
 
 ---
@@ -128,14 +118,16 @@ You should see a new **"AI Game Builder"** panel appear in the bottom dock. It s
 
 ---
 
-## Step 5: Open Claude Code
+## Step 5: Open Claude Code with the Plugin
 
 Open a new terminal and navigate to your Godot project:
 
 ```bash
 cd ~/games/my-first-game
-claude
+claude --plugin-dir ~/ai-game-builder
 ```
+
+> **Alternative**: If you installed via marketplace (`/plugin install godot-ai-builder`), just run `claude` — the plugin loads automatically.
 
 Claude Code starts with full awareness of:
 - The Godot project structure
@@ -247,9 +239,8 @@ my-first-game/
 ├── scenes/               # Scene files
 ├── assets/               # Generated sprites
 ├── docs/PRD.md           # The game design document
-├── addons/               # AI Game Builder plugin
-├── knowledge/            # Reference docs
-└── .claude/              # Skills, hooks, settings
+├── addons/               # Godot editor bridge plugin
+└── knowledge/            # Reference docs
 ```
 
 ---
