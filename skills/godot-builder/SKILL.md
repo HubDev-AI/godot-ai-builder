@@ -125,11 +125,48 @@ Detailed references are in the plugin's `knowledge/` directory:
 
 ## Execution Flow
 
-### 0. Full Game Request → Use Director
-If the user asks to **create a complete game** (not just a feature), load `godot-director` FIRST.
+### 0. Scope Detection — Simple vs. Full Game (CRITICAL)
+
+When the user gives a **short prompt** (1-2 sentences, few details), you MUST ask them to choose scope before proceeding. DO NOT auto-assume a full 6-phase production.
+
+**Examples of short/vague prompts**:
+- "Make a shooter game"
+- "Create a platformer"
+- "Build me a puzzle game"
+- "I want a space invaders clone"
+
+**When you detect a short prompt, ask the user**:
+
+> I can build this two ways:
+>
+> **A) Full game** — I'll design everything: multiple enemy types, UI screens (menu, HUD, game over, pause), progressive difficulty, visual polish (particles, screen shake, animations), and a complete game loop. I'll write a detailed PRD for your approval first. Takes longer but produces a polished, complete game.
+>
+> **B) Simple game** — I'll build exactly what you described, minimal and focused. Basic player, basic gameplay, just enough to be playable. Fast to build, easy to extend later.
+>
+> Which would you prefer?
+
+**When to SKIP the question and go straight to Director (full game)**:
+- User says "complete game", "full game", "polished", "with everything"
+- User provides a **detailed prompt** (3+ sentences with specific features, enemy types, UI screens, etc.)
+- User provides a **folder of design documents** (Mode B)
+- User explicitly lists multiple features: "with enemies, scoring, menus, and polish"
+
+**When to SKIP the question and go straight to simple build**:
+- User says "simple", "basic", "quick", "minimal", "just a prototype"
+- User asks for a single specific feature, not a whole game
+
+### 0a. Full Game Request → Use Director
+If the user chose **Full game** (or the prompt is clearly detailed enough), load `godot-director`.
 The Director handles: PRD generation → phased build → quality gates → polish.
 
-### 0b. Build From Documents → Use Director (Mode B)
+### 0b. Simple Game Request → Direct Build
+If the user chose **Simple game**, skip the Director entirely. Build directly:
+1. Scan project state
+2. Write the minimum files needed (player + main scene + basic gameplay)
+3. Reload → Run → Fix errors
+4. Done. No PRD, no phases, no polish pass.
+
+### 0c. Build From Documents → Use Director (Mode B)
 If the user provides a **folder or files** with game design documents ("use this folder",
 "here are my docs", "build from this GDD", "take these files and build the game"):
 1. Load `godot-director`
@@ -139,7 +176,7 @@ If the user provides a **folder or files** with game design documents ("use this
 ### 1. Understand the Request
 Parse the user's prompt to determine:
 - **Genre**: shooter, platformer, puzzle, RPG, strategy, sandbox, custom
-- **Scope**: new project vs. modify existing vs. full game (→ director)
+- **Scope**: new project vs. modify existing vs. full game (→ director) vs. simple game
 - **Features**: player, enemies, UI, audio, physics, save system, etc.
 
 ### 2. Scan Project State
@@ -152,8 +189,10 @@ ALWAYS call `godot_get_project_state` first to check:
 
 | User Intent | Skills to Load (in order) |
 |---|---|
-| "Create/build a complete game" | `godot-director` (handles everything) |
-| "Create a new game" | `godot-director` → phases 0-6 |
+| Short/vague game request | **ASK scope first** (see Step 0) |
+| "Create a complete/full game" | `godot-director` (handles everything) |
+| Detailed prompt (3+ features) | `godot-director` → phases 0-6 |
+| "Simple/basic/quick game" | Direct build (no Director, no PRD) |
 | "Build from these docs/folder" | `godot-director` (Mode B: reads docs first) |
 | "Add enemies" | `godot-enemies` → `godot-physics` |
 | "Add UI / menu" | `godot-ui` |
