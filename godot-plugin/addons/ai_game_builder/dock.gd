@@ -61,32 +61,7 @@ func _on_bridge_log(message: String):
 
 
 func _on_phase_updated(phase_data: Dictionary):
-	var phase_num: int = phase_data.get("phase_number", 0)
-	var phase_name: String = phase_data.get("phase_name", "")
-	var status: String = phase_data.get("status", "")
-	var gates: Dictionary = phase_data.get("quality_gates", {})
-
-	# Update progress bar
-	if status == "completed":
-		$PhaseSection/PhaseProgress.value = phase_num + 1
-	else:
-		$PhaseSection/PhaseProgress.value = phase_num
-
-	# Update labels
-	$PhaseSection/PhaseLabel.text = "Phase %d: %s" % [phase_num, phase_name]
-	$PhaseSection/PhaseStatusLabel.text = status
-
-	# Color the status label
-	match status:
-		"completed":
-			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.3, 0.9, 0.3))
-		"in_progress":
-			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
-		_:
-			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-
-	# Update quality gates
-	_update_quality_gates(gates)
+	_sync_phase_display(phase_data)
 
 
 func _update_quality_gates(gates: Dictionary):
@@ -100,6 +75,41 @@ func _update_quality_gates(gates: Dictionary):
 		cb.button_pressed = gates[gate_name]
 		cb.disabled = true
 		gates_list.add_child(cb)
+
+
+func _sync_phase_display(phase_data: Dictionary):
+	var phase_num: int = phase_data.get("phase_number", 0)
+	var phase_name: String = phase_data.get("phase_name", "")
+	var status: String = phase_data.get("status", "")
+	var gates: Dictionary = phase_data.get("quality_gates", {})
+
+	# Only update if something actually changed
+	var current_label = $PhaseSection/PhaseLabel.text
+	var expected_label = "Phase %d: %s" % [phase_num, phase_name]
+	if current_label == expected_label and $PhaseSection/PhaseStatusLabel.text == status:
+		return
+
+	# Update progress bar
+	if status == "completed":
+		$PhaseSection/PhaseProgress.value = phase_num + 1
+	else:
+		$PhaseSection/PhaseProgress.value = phase_num
+
+	# Update labels
+	$PhaseSection/PhaseLabel.text = expected_label
+	$PhaseSection/PhaseStatusLabel.text = status
+
+	# Color the status label
+	match status:
+		"completed":
+			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.3, 0.9, 0.3))
+		"in_progress":
+			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
+		_:
+			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+
+	# Update quality gates
+	_update_quality_gates(gates)
 
 
 func _on_run_pressed():
@@ -155,6 +165,10 @@ func _poll_errors():
 	# Update stop button state based on whether a scene is playing
 	if http_bridge.editor_interface:
 		$ControlButtons/StopBtn.disabled = not EditorInterface.is_playing_scene()
+
+	# Sync phase state from the bridge (catches missed signals, plugin reloads, etc.)
+	if not http_bridge._phase_state.is_empty():
+		_sync_phase_display(http_bridge._phase_state)
 
 
 func _set_filter(filter: String):
