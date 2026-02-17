@@ -9,6 +9,7 @@ var http_bridge: Node  # http_bridge.gd
 var _all_messages: Array[Dictionary] = []
 var _current_filter: String = "all"  # "all", "errors", "progress"
 var _seen_error_keys: Dictionary = {}  # track errors already added to log
+var _quality_gate_signature: String = ""
 
 
 func _ready():
@@ -63,11 +64,14 @@ func _sync_phase_display(phase_data: Dictionary):
 	var phase_num: int = phase_data.get("phase_number", 0)
 	var phase_name: String = phase_data.get("phase_name", "")
 	var status: String = phase_data.get("status", "")
+	var quality_gates: Dictionary = _normalize_quality_gates(phase_data.get("quality_gates", {}))
+	var next_gate_signature = _quality_gates_signature(quality_gates)
 	# Only update if something actually changed
 	var current_label = $PhaseSection/PhaseLabel.text
 	var expected_label = "Phase %d: %s" % [phase_num, phase_name]
-	if current_label == expected_label and $PhaseSection/PhaseStatusLabel.text == status:
+	if current_label == expected_label and $PhaseSection/PhaseStatusLabel.text == status and _quality_gate_signature == next_gate_signature:
 		return
+	_quality_gate_signature = next_gate_signature
 
 	# Update progress bar
 	if status == "completed":
@@ -87,6 +91,92 @@ func _sync_phase_display(phase_data: Dictionary):
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
 		_:
 			$PhaseSection/PhaseStatusLabel.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+
+	_sync_quality_gates(quality_gates)
+
+
+func _sync_quality_gates(quality_gates: Dictionary):
+	var list: VBoxContainer = $QualitySection/QualityGatesList
+	for child in list.get_children():
+		child.queue_free()
+
+	if quality_gates.is_empty():
+		$QualitySection/QualitySummary.text = "No gates reported yet."
+		$QualitySection/QualitySummary.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		return
+
+	var gate_names: Array = quality_gates.keys()
+	gate_names.sort()
+	var passed_count := 0
+
+	for gate_name in gate_names:
+		var passed: bool = _gate_value_to_bool(quality_gates[gate_name])
+		if passed:
+			passed_count += 1
+
+		var gate_checkbox := CheckBox.new()
+		gate_checkbox.text = _format_gate_name(str(gate_name))
+		gate_checkbox.button_pressed = passed
+		gate_checkbox.disabled = true
+		gate_checkbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gate_checkbox.focus_mode = Control.FOCUS_NONE
+		list.add_child(gate_checkbox)
+
+	var total_count = gate_names.size()
+	$QualitySection/QualitySummary.text = "Quality gates: %d/%d passed" % [passed_count, total_count]
+	if passed_count == total_count:
+		$QualitySection/QualitySummary.add_theme_color_override("font_color", Color(0.3, 0.9, 0.3))
+	elif passed_count > 0:
+		$QualitySection/QualitySummary.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
+	else:
+		$QualitySection/QualitySummary.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3))
+
+
+func _normalize_quality_gates(raw_gates: Variant) -> Dictionary:
+	if typeof(raw_gates) != TYPE_DICTIONARY:
+		return {}
+	var normalized: Dictionary = {}
+	for key in raw_gates.keys():
+		normalized[str(key)] = _gate_value_to_bool(raw_gates[key])
+	return normalized
+
+
+func _quality_gates_signature(quality_gates: Dictionary) -> String:
+	var gate_names: Array = quality_gates.keys()
+	gate_names.sort()
+	var pairs: PackedStringArray = []
+	for gate_name in gate_names:
+		var passed = _gate_value_to_bool(quality_gates[gate_name])
+		pairs.append("%s:%s" % [str(gate_name), "1" if passed else "0"])
+	return "|".join(pairs)
+
+
+func _gate_value_to_bool(value: Variant) -> bool:
+	match typeof(value):
+		TYPE_BOOL:
+			return value
+		TYPE_INT, TYPE_FLOAT:
+			return value != 0
+		TYPE_STRING:
+			var normalized_value := String(value).to_lower()
+			return normalized_value in ["true", "1", "yes", "pass", "passed", "ok"]
+		TYPE_DICTIONARY:
+			return bool(value.get("passed", false))
+		_:
+			return value != null
+
+
+func _format_gate_name(raw_name: String) -> String:
+	var pretty = raw_name
+	if pretty.begins_with("auto_"):
+		pretty = pretty.substr(5)
+	pretty = pretty.replace("_", " ").strip_edges()
+	var words: PackedStringArray = pretty.split(" ")
+	for i in range(words.size()):
+		if words[i].is_empty():
+			continue
+		words[i] = words[i].substr(0, 1).to_upper() + words[i].substr(1)
+	return " ".join(words)
 
 func _poll_errors():
 	if http_bridge == null or http_bridge._error_collector == null:
