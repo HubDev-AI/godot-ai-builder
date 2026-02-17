@@ -41,6 +41,18 @@ tooltip_text = "Build progress: Phases 0-6 (PRD, Foundation, Abilities, Enemies,
 theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
 
+[node name="QualitySection" type="VBoxContainer" parent="."]
+
+[node name="QualityTitle" type="Label" parent="QualitySection"]
+text = "Quality Gates"
+theme_override_font_sizes/font_size = 12
+
+[node name="QualitySummary" type="Label" parent="QualitySection"]
+text = "No gates reported yet."
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
+
+[node name="QualityGatesList" type="VBoxContainer" parent="QualitySection"]
+
 [node name="Sep3" type="HSeparator" parent="."]
 
 [node name="ErrorSection" type="HBoxContainer" parent="."]
