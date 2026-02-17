@@ -129,6 +129,7 @@ Target outcome for "very good game" status:
 3. PoC PR C: wire rubric scoring + iteration policy (max 3 loops, then escalate).
    - Artifacts: `mcp-server/src/tools.js` (`godot_score_poc_quality`) + Director quality-loop policy updates
 4. PoC Validation: run 3 benchmark builds, compare reports, publish Go/No-Go decision.
+   - Artifact: `scripts/poc-quality-summary.mjs` for automated latest-report aggregation and decision output
 
 ## Decision Rules
 

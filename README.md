@@ -199,6 +199,18 @@ You can also override host/port if needed:
 node scripts/smoke-test.mjs --host 127.0.0.1 --port 6100 --timeout 7000
 ```
 
+PoC quality summary (from saved rubric reports):
+
+```bash
+node scripts/poc-quality-summary.mjs
+```
+
+Machine-readable output:
+
+```bash
+node scripts/poc-quality-summary.mjs --json
+```
+
 ## Project Structure
 
 ```
