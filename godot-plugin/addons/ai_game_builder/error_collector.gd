@@ -8,6 +8,8 @@ var _errors: Array[Dictionary] = []
 var _warnings: Array[Dictionary] = []
 var _log_baseline_size: Dictionary = {}  # log_path -> file size at plugin load
 
+const INITIAL_LOG_TAIL_BYTES = 262144  # Read last 256 KB on first scan
+
 
 func get_errors() -> Array[Dictionary]:
 	_refresh()
@@ -143,21 +145,22 @@ func _parse_log_file(log_path: String):
 
 	var file_size = file.get_length()
 
-	# Record baseline size on first access — only read NEW log entries
+	# On first access, read only the recent tail so we can surface current errors
+	# without flooding the UI with stale historic logs.
+	var start_pos = 0
 	if not _log_baseline_size.has(log_path):
-		_log_baseline_size[log_path] = file_size
-		file.close()
-		return  # Skip all pre-existing log content on first run
+		start_pos = max(file_size - INITIAL_LOG_TAIL_BYTES, 0)
+	else:
+		var baseline = _log_baseline_size[log_path]
+		if file_size <= baseline:
+			file.close()
+			return  # No new content since baseline
+		start_pos = baseline
 
-	var baseline = _log_baseline_size[log_path]
-	if file_size <= baseline:
-		file.close()
-		return  # No new content since baseline
-
-	# Only read bytes written since plugin loaded
-	file.seek(baseline)
+	file.seek(start_pos)
 	var content = file.get_as_text()
 	file.close()
+	_log_baseline_size[log_path] = file_size
 
 	var lines = content.split("\n")
 	for i in range(lines.size()):
@@ -247,7 +250,17 @@ func get_detailed_errors() -> Array[Dictionary]:
 		# Headless validation produced no output — fall back to basic errors
 		return get_errors()
 
-	var full_output: String = str(output[0])
+	var output_parts: PackedStringArray = []
+	for part in output:
+		output_parts.append(str(part))
+	var full_output: String = "\n".join(output_parts)
+	if full_output.strip_edges().is_empty():
+		return get_errors()
+	# If Godot failed to run and produced no parse/runtime errors we can use,
+	# prefer the fast in-process validation.
+	if exit_code != 0 and not ("SCRIPT ERROR:" in full_output or "Parse Error:" in full_output or "Parser Error:" in full_output):
+		return get_errors()
+
 	var errors: Array[Dictionary] = []
 	var lines: PackedStringArray = full_output.split("\n")
 

@@ -25,17 +25,35 @@ async function bridgeRequest(method, path, body = null, timeoutMs = BRIDGE_TIMEO
 
     const res = await fetch(bridgeUrl(path), opts);
     const text = await res.text();
-
+    let payload;
     try {
-      return JSON.parse(text);
+      payload = JSON.parse(text);
     } catch {
-      return { raw: text };
+      const parseErr = new Error(
+        `Godot bridge ${method} ${path} returned non-JSON response`
+      );
+      parseErr.name = "BridgeHttpError";
+      throw parseErr;
     }
+
+    if (!res.ok) {
+      const detail =
+        payload?.error || payload?.message || `HTTP ${res.status} ${res.statusText}`;
+      const httpErr = new Error(
+        `Godot bridge ${method} ${path} failed: ${detail}`
+      );
+      httpErr.name = "BridgeHttpError";
+      throw httpErr;
+    }
+    return payload;
   } catch (err) {
     if (err.name === "AbortError") {
       throw new Error(
         "Godot editor not responding. Is the AI Game Builder plugin enabled?"
       );
+    }
+    if (err.name === "BridgeHttpError") {
+      throw err;
     }
     throw new Error(
       `Cannot connect to Godot editor on port ${BRIDGE_PORT}: ${err.message}`
