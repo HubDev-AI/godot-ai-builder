@@ -291,9 +291,33 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "godot_evaluate_quality_gates",
+    description:
+      "Evaluate objective quality gates for a phase using project files and scene/config signals. For Phase 5+ this checks visual polish proxies (assets, FX, UI styling, layering, feedback cues). For Phase 6 it also checks flow/readiness proxies (main scene, menu/restart/pause flow markers, no pass stubs). Use this before godot_update_phase(..., 'completed') to see what is still missing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        phase_number: {
+          type: "number",
+          description: "Phase number to evaluate (0-6)",
+        },
+        phase_name: {
+          type: "string",
+          description: "Optional phase name for logs/reporting",
+        },
+        quality_gates: {
+          type: "object",
+          description:
+            "Optional gate map already reported by the agent; merged with computed auto gates in output",
+        },
+      },
+      required: ["phase_number"],
+    },
+  },
+  {
     name: "godot_update_phase",
     description:
-      "⚠️ MANDATORY — Update the phase progress bar in the Godot dock panel. You MUST call this at the START of every build phase (status='in_progress') and at the END of every build phase (status='completed').\n\n⛔ HARD GATE: When status='completed', this tool AUTOMATICALLY checks for compilation errors. If ANY errors exist, the phase completion is REJECTED and the tool returns {ok: false, rejected: true} with the error count. You must fix all errors and call this tool again. The phase will NOT advance until zero errors.\n\nCall pattern:\n1. Phase starts: godot_update_phase(N, 'Phase Name', 'in_progress')\n2. Fix all errors first: godot_get_errors() → fix → godot_reload_filesystem() → repeat until 0\n3. Phase ends: godot_update_phase(N, 'Phase Name', 'completed', {gate1: true, ...})\n\nPhase numbers: 0=Discovery/PRD, 1=Foundation, 2=Player Abilities, 3=Enemies, 4=UI & Game Flow, 5=Polish, 6=Final QA",
+      "⚠️ MANDATORY — Update the phase progress bar in the Godot dock panel. You MUST call this at the START of every build phase (status='in_progress') and at the END of every build phase (status='completed').\n\n⛔ HARD GATE #1: When status='completed', this tool AUTOMATICALLY checks for compilation errors. If ANY errors exist, completion is REJECTED.\n⛔ HARD GATE #2 (Phase 5/6): This tool also runs objective quality-gate evaluation. If required quality gates fail, completion is REJECTED with failed gate details.\n\nCall pattern:\n1. Phase starts: godot_update_phase(N, 'Phase Name', 'in_progress')\n2. Fix errors first: godot_get_errors() → fix → godot_reload_filesystem() → repeat until 0\n3. Evaluate quality (especially Phase 5/6): godot_evaluate_quality_gates(N)\n4. Phase ends: godot_update_phase(N, 'Phase Name', 'completed', {gate1: true, ...})\n\nPhase numbers: 0=Discovery/PRD, 1=Foundation, 2=Player Abilities, 3=Enemies, 4=UI & Game Flow, 5=Polish, 6=Final QA",
     inputSchema: {
       type: "object",
       properties: {
@@ -476,6 +500,12 @@ export async function handleToolCall(name, args) {
       return await toolSaveBuildState(args.state);
     case "godot_get_build_state":
       return await toolGetBuildState();
+    case "godot_evaluate_quality_gates":
+      return await toolEvaluateQualityGates(
+        args.phase_number,
+        args.phase_name || "",
+        args.quality_gates || {}
+      );
     case "godot_update_phase":
       return await toolUpdatePhase(args.phase_number, args.phase_name, args.status, args.quality_gates || {});
     case "godot_get_scene_tree":
@@ -724,7 +754,35 @@ async function toolGetBuildState() {
   }
 }
 
+async function toolEvaluateQualityGates(phaseNumber, phaseName = "", qualityGates = {}) {
+  await bridge.sendLog(
+    `[MCP] Evaluating objective quality gates for Phase ${phaseNumber}${phaseName ? ` (${phaseName})` : ""}...`
+  );
+
+  const evaluation = await evaluatePhaseQualityGates(
+    phaseNumber,
+    phaseName,
+    qualityGates
+  );
+
+  const failedCount = evaluation.failed_quality_gates.length;
+  if (failedCount > 0) {
+    await bridge.sendLog(
+      `[MCP] ⚠️ Quality gates failed: ${failedCount} gate(s). ` +
+      `Use failed_quality_gates + gate_details to fix before completion.`
+    );
+  } else {
+    await bridge.sendLog(
+      `[MCP] ✓ Quality gates passed for Phase ${phaseNumber}.`
+    );
+  }
+
+  return evaluation;
+}
+
 async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
+  let mergedQualityGates = qualityGates || {};
+
   // ── HARD GATE: reject phase completion if errors exist ──
   if (status === "completed") {
     await bridge.sendLog(`[MCP] Phase ${phaseNumber}: ${phaseName} — validating before completion...`);
@@ -745,7 +803,7 @@ async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
       );
       // Keep phase as in_progress so the dock shows it's still being worked on
       try {
-        await bridge.updatePhase(phaseNumber, phaseName, "in_progress", qualityGates);
+        await bridge.updatePhase(phaseNumber, phaseName, "in_progress", mergedQualityGates);
       } catch { /* best-effort */ }
       return {
         ok: false,
@@ -763,16 +821,63 @@ async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
           `The phase remains "in_progress" until zero errors.`,
       };
     }
+
+    // ── HARD GATE: objective quality gate evaluation for late phases ──
+    if (phaseNumber >= 5) {
+      const qualityEval = await evaluatePhaseQualityGates(
+        phaseNumber,
+        phaseName,
+        mergedQualityGates
+      );
+      mergedQualityGates = qualityEval.merged_quality_gates;
+
+      if (!qualityEval.gates_passed) {
+        await bridge.sendLog(
+          `[MCP] ⛔ PHASE COMPLETION REJECTED — ${qualityEval.failed_quality_gates.length} quality gates failed.`
+        );
+        try {
+          await bridge.updatePhase(
+            phaseNumber,
+            phaseName,
+            "in_progress",
+            mergedQualityGates
+          );
+        } catch {
+          /* best-effort */
+        }
+        return {
+          ok: false,
+          rejected: true,
+          phase_number: phaseNumber,
+          phase_name: phaseName,
+          requested_status: "completed",
+          actual_status: "in_progress",
+          reason:
+            `PHASE COMPLETION BLOCKED: ${qualityEval.failed_quality_gates.length} objective quality gates failed. ` +
+            `Call godot_evaluate_quality_gates(${phaseNumber}) to inspect gate_details, fix the failed items, then retry completion.`,
+          failed_quality_gates: qualityEval.failed_quality_gates,
+          gate_details: qualityEval.gate_details,
+          quality_metrics: qualityEval.quality_metrics,
+        };
+      }
+    }
+
     await bridge.sendLog(`[MCP] ✓ Phase ${phaseNumber} validation passed — 0 errors. Marking completed.`);
   }
 
   await bridge.sendLog(`[MCP] Phase ${phaseNumber}: ${phaseName} — ${status}`);
   try {
-    await bridge.updatePhase(phaseNumber, phaseName, status, qualityGates);
+    await bridge.updatePhase(phaseNumber, phaseName, status, mergedQualityGates);
   } catch {
     // Phase updates are best-effort — don't fail if Godot isn't running
   }
-  return { ok: true, phase_number: phaseNumber, phase_name: phaseName, status };
+  return {
+    ok: true,
+    phase_number: phaseNumber,
+    phase_name: phaseName,
+    status,
+    quality_gates: mergedQualityGates,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -949,4 +1054,386 @@ async function readProjectGodot() {
   }
 
   return settings;
+}
+
+async function evaluatePhaseQualityGates(
+  phaseNumber,
+  phaseName = "",
+  reportedQualityGates = {}
+) {
+  const phase = Number.isFinite(Number(phaseNumber))
+    ? Number(phaseNumber)
+    : 0;
+  const safeReportedQualityGates =
+    reportedQualityGates && typeof reportedQualityGates === "object"
+      ? reportedQualityGates
+      : {};
+
+  const signals = await collectQualitySignals();
+  const gateDetails = {};
+  const computedQualityGates = {};
+
+  const addGate = (name, passed, expected, actual, hint) => {
+    gateDetails[name] = {
+      passed: Boolean(passed),
+      expected,
+      actual,
+      hint,
+    };
+    computedQualityGates[name] = Boolean(passed);
+  };
+
+  if (phase >= 5) {
+    addGate(
+      "auto_visual_assets_coverage",
+      signals.image_asset_count >= 6,
+      ">= 6 image assets used for gameplay/UI",
+      signals.image_asset_count,
+      "Generate or import more coherent assets (godot_generate_asset_pack + targeted assets)."
+    );
+
+    addGate(
+      "auto_ui_styling_signals",
+      signals.ui_style_hits.length >= 2,
+      ">= 2 UI styling markers",
+      {
+        count: signals.ui_style_hits.length,
+        hits: signals.ui_style_hits,
+      },
+      "Style menus/HUD with theme overrides, StyleBoxFlat, or custom theme APIs."
+    );
+
+    addGate(
+      "auto_polish_fx_signals",
+      signals.polish_fx_hits.length >= 3,
+      ">= 3 polish/FX markers",
+      {
+        count: signals.polish_fx_hits.length,
+        hits: signals.polish_fx_hits,
+      },
+      "Add screen shake, particles, shaders, tweens, trails, or hit/death FX."
+    );
+
+    addGate(
+      "auto_visual_depth_layering",
+      signals.depth_layer_hits.length >= 2,
+      ">= 2 depth/layering markers",
+      {
+        count: signals.depth_layer_hits.length,
+        hits: signals.depth_layer_hits,
+      },
+      "Add layered background/foreground composition (e.g. parallax, vignette, gradient layers)."
+    );
+
+    addGate(
+      "auto_feedback_event_coverage",
+      signals.feedback_category_count >= 3,
+      ">= 3 feedback event categories",
+      {
+        count: signals.feedback_category_count,
+        categories: signals.feedback_categories,
+      },
+      "Ensure hit/damage, death, pickup/score, and ability events have explicit feedback hooks."
+    );
+  }
+
+  if (phase >= 6) {
+    addGate(
+      "auto_main_scene_configured",
+      signals.main_scene_exists,
+      "project.godot has a valid existing main scene",
+      {
+        main_scene: signals.main_scene,
+        resolved_main_scene_path: signals.resolved_main_scene_path,
+        exists: signals.main_scene_exists,
+      },
+      "Set application/run/main_scene to a valid .tscn path."
+    );
+
+    addGate(
+      "auto_flow_state_signals",
+      signals.flow_category_count >= 3,
+      ">= 3 flow state categories (menu, game_over, retry/restart, pause)",
+      {
+        count: signals.flow_category_count,
+        categories: signals.flow_categories,
+      },
+      "Wire complete menu → play → game over → retry/menu flow with explicit handlers."
+    );
+
+    addGate(
+      "auto_scene_coverage",
+      signals.scene_count >= 2,
+      ">= 2 scenes (gameplay + menu/flow scene)",
+      signals.scene_count,
+      "Add dedicated flow scenes (menu/gameplay/game-over) instead of a single monolithic scene."
+    );
+
+    addGate(
+      "auto_no_stub_pass_methods",
+      signals.pass_stub_count === 0,
+      "0 function stubs that immediately use 'pass'",
+      signals.pass_stub_count,
+      "Replace pass stubs with real implementation or explicit temporary behavior."
+    );
+  }
+
+  const mergedQualityGates = {
+    ...safeReportedQualityGates,
+    ...computedQualityGates,
+  };
+  const failedQualityGates = Object.entries(gateDetails)
+    .filter(([, detail]) => !detail.passed)
+    .map(([name]) => name);
+  const gatesPassed = failedQualityGates.length === 0;
+
+  return {
+    ok: gatesPassed,
+    phase_number: phase,
+    phase_name: phaseName || phaseNameForNumber(phase),
+    gates_passed: gatesPassed,
+    failed_quality_gates: failedQualityGates,
+    computed_quality_gates: computedQualityGates,
+    merged_quality_gates: mergedQualityGates,
+    gate_details: gateDetails,
+    quality_metrics: {
+      script_count: signals.script_count,
+      scene_count: signals.scene_count,
+      image_asset_count: signals.image_asset_count,
+      audio_asset_count: signals.audio_asset_count,
+      main_scene: signals.main_scene,
+      resolved_main_scene_path: signals.resolved_main_scene_path,
+      main_scene_exists: signals.main_scene_exists,
+      ui_style_hits: signals.ui_style_hits.length,
+      polish_fx_hits: signals.polish_fx_hits.length,
+      depth_layer_hits: signals.depth_layer_hits.length,
+      feedback_category_count: signals.feedback_category_count,
+      flow_category_count: signals.flow_category_count,
+      pass_stub_count: signals.pass_stub_count,
+    },
+  };
+}
+
+async function collectQualitySignals() {
+  const files = await scanDir(PROJECT_PATH, [
+    "gd",
+    "tscn",
+    "tres",
+    "svg",
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+    "ogg",
+    "wav",
+  ]);
+  const settings = await readProjectGodot();
+
+  const scripts = files.filter((f) => f.endsWith(".gd"));
+  const scenes = files.filter((f) => f.endsWith(".tscn"));
+  const imageAssets = files.filter(
+    (f) =>
+      f.endsWith(".svg") ||
+      f.endsWith(".png") ||
+      f.endsWith(".jpg") ||
+      f.endsWith(".jpeg") ||
+      f.endsWith(".webp")
+  );
+  const audioAssets = files.filter(
+    (f) => f.endsWith(".ogg") || f.endsWith(".wav")
+  );
+
+  const [scriptContents, sceneContents] = await Promise.all([
+    readResTextFiles(scripts),
+    readResTextFiles(scenes),
+  ]);
+
+  const scriptText = scriptContents.join("\n").toLowerCase();
+  const sceneText = sceneContents.join("\n").toLowerCase();
+  const combinedText = `${scriptText}\n${sceneText}`;
+
+  const uiStyleHits = findKeywordHits(combinedText, [
+    "styleboxflat",
+    "theme_override_styles",
+    "theme_override_colors",
+    "theme_override_font_sizes",
+    "add_theme_stylebox_override",
+    "add_theme_color_override",
+    "add_theme_font_size_override",
+    "theme =",
+    "theme_type_variation",
+  ]);
+
+  const polishFxHits = findKeywordHits(combinedText, [
+    "gpuparticles2d",
+    "cpuparticles2d",
+    "shadermaterial",
+    "shader",
+    "create_tween",
+    "tween",
+    "screen_shake",
+    "hit_flash",
+    "dissolve",
+    "vignette",
+    "trail",
+    "animationplayer",
+  ]);
+
+  const depthLayerHits = findKeywordHits(combinedText, [
+    "parallaxbackground",
+    "parallax2d",
+    "canvaslayer",
+    "midground",
+    "foreground",
+    "vignette",
+    "gradient",
+    "background",
+  ]);
+
+  const feedbackCategories = findCategoryHits(combinedText, {
+    damage: ["take_damage", "damage", "hurt", "hit_flash", "on_hit"],
+    death: ["die", "death", "explode", "dissolve", "destroyed"],
+    pickup_score: ["pickup", "collect", "score", "combo", "pop_score"],
+    ability: ["shoot", "dash", "jump", "ability", "cast", "fire"],
+  });
+
+  const flowCategories = findCategoryHits(combinedText, {
+    menu: ["main_menu", "mainmenu", "menu"],
+    game_over: ["game_over", "gameover", "defeat", "you lose"],
+    restart_retry: ["restart", "retry", "new_game"],
+    pause: ["pause", "paused", "get_tree().paused", "esc"],
+  });
+
+  const mainScene = settings["application/run/main_scene"] || "";
+  const resolvedMainScenePath = await resolveMainScenePath(mainScene, scenes);
+  const mainSceneExists = !!resolvedMainScenePath;
+
+  return {
+    script_count: scripts.length,
+    scene_count: scenes.length,
+    image_asset_count: imageAssets.length,
+    audio_asset_count: audioAssets.length,
+    main_scene: mainScene,
+    resolved_main_scene_path: resolvedMainScenePath,
+    main_scene_exists: mainSceneExists,
+    ui_style_hits: uiStyleHits,
+    polish_fx_hits: polishFxHits,
+    depth_layer_hits: depthLayerHits,
+    feedback_categories: Object.keys(feedbackCategories),
+    feedback_category_count: Object.keys(feedbackCategories).length,
+    flow_categories: Object.keys(flowCategories),
+    flow_category_count: Object.keys(flowCategories).length,
+    pass_stub_count: scriptContents.reduce(
+      (sum, content) => sum + countPassStubs(content),
+      0
+    ),
+  };
+}
+
+async function readResTextFiles(resPaths) {
+  const contents = [];
+  for (const resPath of resPaths) {
+    try {
+      const absPath = resToAbsolute(resPath);
+      const text = await readFile(absPath, "utf-8");
+      contents.push(text);
+    } catch {
+      // Ignore unreadable files; quality checks are best-effort.
+    }
+  }
+  return contents;
+}
+
+function findKeywordHits(text, keywords) {
+  const hits = [];
+  for (const keyword of keywords) {
+    if (text.includes(keyword.toLowerCase())) {
+      hits.push(keyword);
+    }
+  }
+  return hits;
+}
+
+function findCategoryHits(text, categories) {
+  const hitCategories = {};
+  for (const [category, patterns] of Object.entries(categories)) {
+    if (patterns.some((pattern) => text.includes(pattern.toLowerCase()))) {
+      hitCategories[category] = true;
+    }
+  }
+  return hitCategories;
+}
+
+function countPassStubs(content) {
+  const lines = content.split("\n");
+  let count = 0;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/^\s*func\s+/.test(lines[i])) continue;
+
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const next = lines[j].trim();
+      if (!next || next.startsWith("#")) continue;
+      if (/^func\s+/.test(next)) break;
+      if (/^pass(\s+#.*)?$/.test(next)) count += 1;
+      break;
+    }
+  }
+
+  return count;
+}
+
+async function fileExists(path) {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveMainScenePath(mainScene, scenePaths) {
+  if (!mainScene) return "";
+
+  if (mainScene.startsWith("res://")) {
+    return (await fileExists(resToAbsolute(mainScene))) ? mainScene : "";
+  }
+
+  if (mainScene.startsWith("uid://")) {
+    for (const scenePath of scenePaths) {
+      try {
+        const content = await readFile(resToAbsolute(scenePath), "utf-8");
+        if (content.includes(`uid="${mainScene}"`)) {
+          return scenePath;
+        }
+      } catch {
+        // Ignore unreadable scene files.
+      }
+    }
+    return "";
+  }
+
+  const absolutePath = resolve(PROJECT_PATH, mainScene);
+  return (await fileExists(absolutePath)) ? mainScene : "";
+}
+
+function phaseNameForNumber(num) {
+  switch (num) {
+    case 0:
+      return "Discovery & PRD";
+    case 1:
+      return "Foundation";
+    case 2:
+      return "Player Abilities";
+    case 3:
+      return "Enemies & Challenges";
+    case 4:
+      return "UI & Game Flow";
+    case 5:
+      return "Polish & Game Feel";
+    case 6:
+      return "Final QA";
+    default:
+      return `Phase ${num}`;
+  }
 }
