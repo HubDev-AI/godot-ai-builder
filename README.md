@@ -100,6 +100,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_log` | Send progress messages to the Godot dock panel |
 | `godot_save_build_state` | Save build checkpoint (phase progress, files, quality gates) |
 | `godot_get_build_state` | Load build checkpoint (detect interrupted builds) |
+| `godot_get_latest_quality_report` | Read recent quality reports from `.claude/quality_reports` (optional phase filter) |
 | `godot_evaluate_quality_gates` | Run objective quality checks (especially Phase 5/6) and return failed gates |
 | `godot_update_phase` | Update dock phase progress (number, name, status, gates) |
 

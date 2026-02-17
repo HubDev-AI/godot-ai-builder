@@ -823,6 +823,7 @@ When executing, ALWAYS:
      fix weakest gates first using eval.gate_details[*].hint
      repeat until eval.gates_passed == true
    ```
+   If failures repeat across attempts, call `godot_get_latest_quality_report(N, 3)` and compare recurring failed gates before choosing the next fix.
 8. At each phase END (after quality gate passes):
    ```
    godot_update_phase(N, "Phase Name", "completed", {gate1: true, gate2: true, ...})
