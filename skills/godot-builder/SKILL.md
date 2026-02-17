@@ -271,14 +271,20 @@ A Stop hook prevents Claude from finishing while a game build is in progress.
 - The file `.claude/.build_in_progress` acts as a lock. The Director sets it at Phase 0 and removes it at Phase 6.
 - Manual cancel: `rm .claude/.build_in_progress`
 
-### Error Handling (ZERO TOLERANCE)
-When `godot_get_errors` returns errors:
-1. Read the error message and file path
+### Error Handling (ENFORCED BY HARD GATES)
+
+**The MCP tools now enforce error checking automatically:**
+- **`godot_reload_filesystem()`** auto-checks errors after every reload. The response includes `_error_count` — if > 0, you MUST stop and fix errors before writing more files.
+- **`godot_update_phase(N, name, "completed")`** REJECTS if errors exist. The tool returns `{ok: false, rejected: true}` and the phase stays "in_progress". You literally cannot advance phases with errors.
+- **Every tool response** includes `_error_count`. If > 0, stop and fix.
+
+**You still must:**
+1. Read the error message and file path (from `godot_get_errors`)
 2. Read the problematic file, fix the issue
-3. Call `godot_reload_filesystem` → `godot_get_errors` again
+3. Call `godot_reload_filesystem` → check `_error_count` in response
 4. **Repeat until ZERO errors.** Do not give up. Do not declare "done" with errors remaining.
 5. If stuck after 3 attempts on the same error: rewrite the script from scratch using simpler code
-6. **NEVER finish a build with errors.** This is non-negotiable.
+6. **NEVER finish a build with errors.** The tools enforce this, but you should actively pursue zero errors too.
 
 ### Knowledge Base
 Detailed references are in the plugin's `knowledge/` directory:

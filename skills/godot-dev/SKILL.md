@@ -409,6 +409,19 @@ Every MCP tool logs to the Godot dock via `bridge.sendLog()`:
 
 **Additionally, every tool response includes a `_dock_reminder` field** that reminds the AI to call `godot_log()` after the tool completes. This ensures the AI keeps the Godot dock updated constantly. The `godot_log` and `godot_update_phase` tool descriptions are marked ⚠️ MANDATORY to further reinforce this requirement.
 
+### Error Enforcement (HARD GATES)
+The MCP server enforces error checking at the tool level — the AI cannot bypass these:
+
+1. **`index.js`**: Every tool response (except lightweight tools) includes `_error_count` from a live bridge check. If > 0, `_action_required` tells the AI to stop and fix.
+
+2. **`toolReloadFilesystem`**: After reloading, automatically calls `bridge.getErrors()` and includes `_error_count` and `_error_files` in the response. Logs a warning to the dock if errors exist.
+
+3. **`toolUpdatePhase` with status="completed"**: Calls `bridge.getErrors()` first. If any errors exist, the completion is REJECTED — returns `{ok: false, rejected: true}` with error details. The phase is kept at "in_progress". This is the hardest gate: the AI literally cannot mark a phase complete while errors exist.
+
+4. **`getErrorCount()`**: Exported helper used by `index.js` to get a quick error count from the bridge's cached validation. Does NOT run headless Godot (that would be too slow for every call).
+
+These gates ensure that even if the AI ignores skill instructions about error checking, the tools themselves force compliance.
+
 ### Error Handling in MCP Tools
 - Bridge requests have a 5-second timeout
 - `isConnected()` checks by calling `getStatus()` — swallows errors

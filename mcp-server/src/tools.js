@@ -67,7 +67,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_reload_filesystem",
     description:
-      "Tell the Godot editor to rescan the filesystem. Call this after writing or modifying files so the editor picks up changes. After calling this, use godot_log() to report what you're doing next.",
+      "Tell the Godot editor to rescan the filesystem. Call this after writing or modifying files so the editor picks up changes. This tool AUTOMATICALLY checks for errors after reloading and returns the error count in _error_count. If errors are found, _action_required will tell you to fix them BEFORE writing more files.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -293,7 +293,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_update_phase",
     description:
-      "⚠️ MANDATORY — Update the phase progress bar in the Godot dock panel. You MUST call this at the START of every build phase (status='in_progress') and at the END of every build phase (status='completed'). The phase bar will NOT update unless you call this tool — skipping it makes the progress bar appear stuck and the user will think the build is frozen.\n\nCall pattern:\n1. Phase starts: godot_update_phase(N, 'Phase Name', 'in_progress')\n2. Phase ends: godot_update_phase(N, 'Phase Name', 'completed', {gate1: true, ...})\n\nPhase numbers: 0=Discovery/PRD, 1=Foundation, 2=Player Abilities, 3=Enemies, 4=UI & Game Flow, 5=Polish, 6=Final QA",
+      "⚠️ MANDATORY — Update the phase progress bar in the Godot dock panel. You MUST call this at the START of every build phase (status='in_progress') and at the END of every build phase (status='completed').\n\n⛔ HARD GATE: When status='completed', this tool AUTOMATICALLY checks for compilation errors. If ANY errors exist, the phase completion is REJECTED and the tool returns {ok: false, rejected: true} with the error count. You must fix all errors and call this tool again. The phase will NOT advance until zero errors.\n\nCall pattern:\n1. Phase starts: godot_update_phase(N, 'Phase Name', 'in_progress')\n2. Fix all errors first: godot_get_errors() → fix → godot_reload_filesystem() → repeat until 0\n3. Phase ends: godot_update_phase(N, 'Phase Name', 'completed', {gate1: true, ...})\n\nPhase numbers: 0=Discovery/PRD, 1=Foundation, 2=Player Abilities, 3=Enemies, 4=UI & Game Flow, 5=Polish, 6=Final QA",
     inputSchema: {
       type: "object",
       properties: {
@@ -582,7 +582,35 @@ async function toolGetErrors(detailed = true) {
 
 async function toolReloadFilesystem() {
   await bridge.sendLog("[MCP] Reloading filesystem...");
-  return await bridge.reloadFilesystem();
+  const result = await bridge.reloadFilesystem();
+
+  // ── Auto-check errors after every reload so the AI always knows its error state ──
+  let errorCount = 0;
+  let errorSummary = [];
+  try {
+    const errorResult = await bridge.getErrors();
+    const errors = errorResult.errors || [];
+    errorCount = errors.length;
+    errorSummary = errors.slice(0, 5).map((e) => e.file || e.message || "unknown");
+    if (errorCount > 0) {
+      await bridge.sendLog(
+        `[MCP] ⚠️ ${errorCount} errors detected after reload. You MUST call godot_get_errors() and fix them before writing more files.`
+      );
+    } else {
+      await bridge.sendLog("[MCP] ✓ Reload complete — 0 errors.");
+    }
+  } catch {
+    // Bridge may not be available for error check
+  }
+
+  return {
+    ...result,
+    _error_count: errorCount,
+    _error_files: errorSummary,
+    _action_required: errorCount > 0
+      ? `STOP: ${errorCount} errors detected. Call godot_get_errors() to see details and fix them NOW before writing any more files. Do NOT continue building with errors.`
+      : null,
+  };
 }
 
 async function toolParseScene(scenePath) {
@@ -697,6 +725,47 @@ async function toolGetBuildState() {
 }
 
 async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
+  // ── HARD GATE: reject phase completion if errors exist ──
+  if (status === "completed") {
+    await bridge.sendLog(`[MCP] Phase ${phaseNumber}: ${phaseName} — validating before completion...`);
+    let errorCount = 0;
+    let errorFiles = [];
+    try {
+      const errorResult = await bridge.getErrors();
+      const errors = errorResult.errors || [];
+      errorCount = errors.length;
+      errorFiles = errors.slice(0, 10).map((e) => e.file || e.message || "unknown");
+    } catch {
+      // If we can't check errors (bridge down), allow completion
+    }
+
+    if (errorCount > 0) {
+      await bridge.sendLog(
+        `[MCP] ⛔ PHASE COMPLETION REJECTED — ${errorCount} errors exist. Fix ALL errors before completing Phase ${phaseNumber}.`
+      );
+      // Keep phase as in_progress so the dock shows it's still being worked on
+      try {
+        await bridge.updatePhase(phaseNumber, phaseName, "in_progress", qualityGates);
+      } catch { /* best-effort */ }
+      return {
+        ok: false,
+        rejected: true,
+        phase_number: phaseNumber,
+        phase_name: phaseName,
+        requested_status: "completed",
+        actual_status: "in_progress",
+        error_count: errorCount,
+        error_files: errorFiles,
+        reason:
+          `PHASE COMPLETION BLOCKED: ${errorCount} compilation errors found. ` +
+          `You MUST call godot_get_errors() to see the full error details, fix every error, ` +
+          `then call godot_update_phase(${phaseNumber}, "${phaseName}", "completed") again. ` +
+          `The phase remains "in_progress" until zero errors.`,
+      };
+    }
+    await bridge.sendLog(`[MCP] ✓ Phase ${phaseNumber} validation passed — 0 errors. Marking completed.`);
+  }
+
   await bridge.sendLog(`[MCP] Phase ${phaseNumber}: ${phaseName} — ${status}`);
   try {
     await bridge.updatePhase(phaseNumber, phaseName, status, qualityGates);
@@ -794,6 +863,19 @@ async function toolGetOpenScripts() {
   const count = result.scripts?.length || 0;
   await bridge.sendLog(`[MCP] ${count} scripts open in editor`);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Exported helpers (used by index.js)
+// ---------------------------------------------------------------------------
+
+/**
+ * Quick error count check via the bridge (fast — uses cached validation).
+ * Returns 0 if bridge is unavailable.
+ */
+export async function getErrorCount() {
+  const result = await bridge.getErrors();
+  return result.errors?.length || 0;
 }
 
 // ---------------------------------------------------------------------------
