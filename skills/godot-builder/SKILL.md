@@ -125,6 +125,7 @@ Available MCP tools:
 - `godot_install_addon` — Install a curated add-on into the current project
 - `godot_verify_addon` — Verify add-on health (required files/signals)
 - `godot_apply_integration_pack` — Apply a curated integration pack (PoC: `pack_polish`)
+- `godot_score_poc_quality` — Score PoC runs and enforce max-iteration quality verdicts
 - `godot_log` — **Send a message to the Godot dock panel** (call CONSTANTLY for user visibility)
 - `godot_save_build_state` — **Save build checkpoint** (phase progress, files written, quality gates)
 - `godot_get_build_state` — **Load build checkpoint** (check for interrupted builds at session start)

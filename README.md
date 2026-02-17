@@ -16,7 +16,7 @@ directly to disk               |
 Godot auto-reloads      Run / Stop / Get Errors
 ```
 
-Claude Code is the brain. The plugin gives it 14 specialized game development skills, 27 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
+Claude Code is the brain. The plugin gives it 14 specialized game development skills, 28 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
 
 ## Install
 
@@ -83,7 +83,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot-ops` | MCP tool operations: run, stop, errors, reload |
 | `godot-templates` | Genre-specific templates with file manifests |
 
-### MCP Tools (27 tools via godot-bridge)
+### MCP Tools (28 tools via godot-bridge)
 
 | Tool | Purpose |
 |------|---------|
@@ -106,6 +106,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_get_build_state` | Load build checkpoint (detect interrupted builds) |
 | `godot_get_latest_quality_report` | Read recent quality reports from `.claude/quality_reports` (optional phase filter) |
 | `godot_evaluate_quality_gates` | Run objective quality checks (especially Phase 5/6) and return failed gates |
+| `godot_score_poc_quality` | Score PoC runs with weighted rubric and enforce max-iteration verdicts (`go`/`needs_iteration`/`no_go`) |
 | `godot_update_phase` | Update dock phase progress (number, name, status, gates) |
 
 **Editor Integration** (inspect, verify, manipulate — what Ziva charges $20/month for):
@@ -217,7 +218,7 @@ godot-ai-builder/
 ├── mcp-server/                # Node.js MCP bridge
 │   ├── index.js
 │   └── src/
-│       ├── tools.js           # 27 MCP tool definitions
+│       ├── tools.js           # 28 MCP tool definitions
 │       ├── godot-bridge.js    # HTTP client -> Godot
 │       ├── scene-parser.js    # .tscn parser
 │       └── asset-generator.js # SVG/PNG generator

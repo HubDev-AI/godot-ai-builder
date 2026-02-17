@@ -136,6 +136,24 @@ Apply curated pack with strict fail-loud behavior:
 ```
 If this returns `rejected: true`, treat it as a hard blocker and fix integration before phase completion.
 
+### godot_score_poc_quality
+Score a PoC run and enforce iteration policy:
+```json
+{
+  "benchmark_id": "poc_prompt_01",
+  "iteration_count": 2,
+  "max_iterations": 3,
+  "hard_gates": {"zero_script_errors": true, "no_critical_warnings": true, "play_loop_complete": true, "controls_clear": true, "no_soft_lock": true, "quality_gates_passed": true},
+  "anti_tutorial_visual_checks": {"named_art_direction": true, "palette_discipline": true, "silhouette_readability": true, "layering_depth": true, "feedback_clarity": true, "ui_theme_consistency": true, "no_raw_placeholder_feel": true},
+  "scores": {"core_loop_fun": 4, "controls_game_feel": 4, "progression_variety": 4, "encounter_depth": 3, "visual_polish_cohesion": 4, "ux_onboarding_feedback": 4},
+  "signature_moments": ["moment_1", "moment_2"]
+}
+```
+Use verdict output:
+- `go`: quality target met
+- `needs_iteration`: fix `next_actions` and rerun
+- `no_go`: max iterations reached, escalate to user
+
 ### godot_log (⚠️ MANDATORY — call constantly)
 Send a message to the Godot dock panel. This is the user's ONLY way to see your progress in the Godot editor. You MUST call this tool constantly — before and after every file write, every test, every error fix, every decision, every phase transition. Aim for 3-5 calls per file write minimum.
 ```json
