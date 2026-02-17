@@ -20,7 +20,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_get_project_state",
     description:
-      "Get the current Godot project state: project name, scenes, scripts, resources, settings, and whether the editor is connected. Always call this first to understand the project before generating code.",
+      "Get the current Godot project state: project name, scenes, scripts, resources, settings, and whether the editor is connected. Always call this first to understand the project before generating code. After calling this, use godot_log() to report what you found to the Godot dock panel.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -29,7 +29,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_run_scene",
     description:
-      "Run a scene in the Godot editor. If scene_path is omitted, runs the main scene. Requires the Godot editor to be open with the AI Game Builder plugin enabled.",
+      "Run a scene in the Godot editor. If scene_path is omitted, runs the main scene. Requires the Godot editor to be open with the AI Game Builder plugin enabled. After calling this, use godot_log() to report the test results to the dock.",
     inputSchema: {
       type: "object",
       properties: {
@@ -52,7 +52,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_get_errors",
     description:
-      "Get current errors and warnings from the Godot editor. By default runs headless Godot validation which returns DETAILED error messages with file paths, line numbers, and actual error text (takes 2-5 seconds). Set detailed=false for a fast check that only tells you WHICH files have errors but not WHY.",
+      "Get current errors and warnings from the Godot editor. By default runs headless Godot validation which returns DETAILED error messages with file paths, line numbers, and actual error text (takes 2-5 seconds). Set detailed=false for a fast check that only tells you WHICH files have errors but not WHY. After calling this, use godot_log() to report the results to the dock (e.g. 'Checked errors: 2 errors found in player.gd' or '✓ 0 errors').",
     inputSchema: {
       type: "object",
       properties: {
@@ -67,7 +67,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_reload_filesystem",
     description:
-      "Tell the Godot editor to rescan the filesystem. Call this after writing or modifying files so the editor picks up changes.",
+      "Tell the Godot editor to rescan the filesystem. Call this after writing or modifying files so the editor picks up changes. After calling this, use godot_log() to report what you're doing next.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -253,14 +253,14 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_log",
     description:
-      "Send a message to the AI Game Builder dock panel in the Godot editor. Use this to report progress, phase changes, file writes, and status updates so the user can see activity in real-time. Call this frequently — after writing files, before/after running scenes, when starting/finishing phases, etc.",
+      "⚠️ MANDATORY — Send a progress message to the Godot editor dock panel. You MUST call this tool constantly throughout the entire build process. The dock panel is the user's PRIMARY way to monitor what you are doing — if you don't call this, the user sees NOTHING happening and thinks the build is stuck.\n\nYou MUST call godot_log:\n- BEFORE writing every file (what you're about to write and why)\n- AFTER writing every file (confirm it's done, line count)\n- When starting each build phase\n- When finishing each build phase (with quality gate results)\n- When encountering errors (what the error is)\n- When fixing errors (what the fix was)\n- Before and after running scenes\n- Before and after checking errors\n- When making any decision (what you chose and why)\n\nAim for 3-5 godot_log calls per file write. Call it between every 2-3 other tool calls at minimum. MORE IS BETTER — the user wants constant visibility.",
     inputSchema: {
       type: "object",
       properties: {
         message: {
           type: "string",
           description:
-            "Message to display in the Godot dock panel. Examples: 'Writing scripts/player.gd — WASD movement...', 'Phase 2 complete. 5/5 gates passed.', 'Fixing error in main.gd line 15...'",
+            "Message to display in the Godot dock panel. Be specific and descriptive. Examples: 'Writing scripts/player.gd — WASD movement, mouse aim, shooting (layer 1, mask 4)...', '✓ scripts/player.gd written — 85 lines', 'Phase 2: Player Abilities — complete. 4/4 gates passed.', 'ERROR in main.gd:15 — GameManager not found, fixing autoload registration...', '✓ Error fixed, retesting...'",
         },
       },
       required: ["message"],
@@ -269,7 +269,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_save_build_state",
     description:
-      "Save the current build state to a checkpoint file (.claude/build_state.json). Call this after each phase completes to enable session resumption if Claude is interrupted. The state object should include: version, build_id, timestamp, game_name, genre, visual_tier, current_phase, completed_phases, files_written, error_history, test_runs, prd_path, next_steps.",
+      "Save the current build state to a checkpoint file (.claude/build_state.json). MANDATORY: Call this after each phase completes to enable session resumption if Claude is interrupted. Also call godot_log() to confirm the checkpoint was saved. The state object should include: version, build_id, timestamp, game_name, genre, visual_tier, current_phase, completed_phases, files_written, error_history, test_runs, prd_path, next_steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -293,7 +293,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_update_phase",
     description:
-      "Update the Godot dock panel with the current build phase progress. Call this at the start and end of each build phase so the user can see progress in the editor. Also updates quality gate checkboxes in the dock.",
+      "⚠️ MANDATORY — Update the phase progress bar in the Godot dock panel. You MUST call this at the START of every build phase (status='in_progress') and at the END of every build phase (status='completed'). The phase bar will NOT update unless you call this tool — skipping it makes the progress bar appear stuck and the user will think the build is frozen.\n\nCall pattern:\n1. Phase starts: godot_update_phase(N, 'Phase Name', 'in_progress')\n2. Phase ends: godot_update_phase(N, 'Phase Name', 'completed', {gate1: true, ...})\n\nPhase numbers: 0=Discovery/PRD, 1=Foundation, 2=Player Abilities, 3=Enemies, 4=UI & Game Flow, 5=Polish, 6=Final QA",
     inputSchema: {
       type: "object",
       properties: {

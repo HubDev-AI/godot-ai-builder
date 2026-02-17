@@ -399,13 +399,15 @@ Skills reference each other. Key dependencies:
 - `godot-player` / `godot-enemies` → reference visual patterns from `godot-assets`
 - `godot-ops` → documents all MCP tools that other skills call
 
-### Logging Convention
+### Logging Convention (MANDATORY)
 Every MCP tool logs to the Godot dock via `bridge.sendLog()`:
 - Prefix with `[MCP]` for tool operations
 - Prefix with `[Agent: name]` for sub-agent work
 - Log BEFORE and AFTER operations
 - Include meaningful details: file names, error counts, phase numbers
 - Logging is best-effort (silent failure) — never let a log failure break a tool
+
+**Additionally, every tool response includes a `_dock_reminder` field** that reminds the AI to call `godot_log()` after the tool completes. This ensures the AI keeps the Godot dock updated constantly. The `godot_log` and `godot_update_phase` tool descriptions are marked ⚠️ MANDATORY to further reinforce this requirement.
 
 ### Error Handling in MCP Tools
 - Bridge requests have a 5-second timeout

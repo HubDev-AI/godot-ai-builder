@@ -20,6 +20,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
     const result = await handleToolCall(name, args || {});
+    // Remind the AI to keep the Godot dock updated after every tool call
+    if (name !== "godot_log" && name !== "godot_update_phase") {
+      result._dock_reminder =
+        "IMPORTANT: Call godot_log() now to tell the user what you are doing next. " +
+        "The Godot dock panel is the user's primary progress monitor. " +
+        "Also call godot_update_phase() whenever you start or finish a build phase.";
+    }
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };

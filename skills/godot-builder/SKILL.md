@@ -146,28 +146,42 @@ At the START of every session, before analyzing the user's request:
 
 If MCP tools fail or aren't available, tell the user: "MCP tools not loaded. Start Claude Code with: `claude --plugin-dir /path/to/godot-ai-builder`"
 
-## MANDATORY: Report Progress to BOTH Terminal AND Godot Dock
+## ⛔ MANDATORY: Dock Logging Protocol (NEVER SKIP — AS IMPORTANT AS FIXING ERRORS) ⛔
 
-**NEVER write files silently.** Report progress in TWO places:
-1. **Terminal** — print what you did (the user sees this in Claude Code)
-2. **Godot dock** — call `godot_log` so the user sees activity in the Godot editor panel
+**The Godot dock panel is the user's PRIMARY progress monitor. If you do not push logs constantly, the user sees NOTHING and thinks the build is broken.**
 
-Call `godot_log` **as much as possible**. The user should see constant activity in the dock. Examples:
+### Hard Rules — Violating These Is a Build Failure
 
-```
-godot_log("Writing scripts/player.gd — WASD movement + mouse aim + shooting...")
-godot_log("Writing scripts/enemy.gd — Chase AI, health system, death animation...")
-godot_log("Phase 1 complete. 5/5 quality gates passed.")
-godot_log("ERROR in main.gd:15 — fixing GameManager reference...")
-godot_log("All errors fixed. Running game...")
-```
+1. **NEVER write a file without calling `godot_log` before AND after.**
+   ```
+   godot_log("Writing scripts/player.gd — WASD movement + mouse aim + shooting...")
+   [...write the file...]
+   godot_log("✓ scripts/player.gd written — 85 lines")
+   ```
 
-Call `godot_log` BEFORE and AFTER every file write, every phase transition, every error fix, every test run. The more the better — the user wants to see the game being built in real-time.
+2. **NEVER transition between phases without calling `godot_update_phase`.**
+   ```
+   godot_update_phase(1, "Foundation", "in_progress")
+   [...build phase 1...]
+   godot_update_phase(1, "Foundation", "completed", {movement: true, camera: true, background: true})
+   ```
 
-### Sub-Agent Dock Logging
-Sub-agents have access to the same MCP tools. **Every sub-agent MUST call `godot_log` frequently** to report its progress to the Godot dock. This is critical — without it, the user sees nothing when agents are working in parallel.
+3. **NEVER call 3+ tools without a `godot_log` in between.**
+   After every 2-3 tool calls, insert a `godot_log` explaining what you're doing next.
 
-Sub-agents should prefix their messages: `godot_log("[Agent: enemies] Writing enemy_chase.gd...")`
+4. **ALWAYS log errors, fixes, decisions, test results, and scene runs.**
+   ```
+   godot_log("ERROR in main.gd:15 — GameManager not found")
+   godot_log("FIX: Registering GameManager autoload in project.godot...")
+   godot_log("✓ Error fixed. Retesting...")
+   godot_log("Running game to verify fix... 0 errors ✓")
+   ```
+
+5. **Aim for 3-5 `godot_log` calls per file write.** More is always better.
+
+6. **Sub-agents MUST log with prefix.** `godot_log("[Agent: enemies] Writing enemy_chase.gd...")`
+
+**Every tool response includes a reminder to call `godot_log`. Follow it.**
 
 ## Critical Rules
 

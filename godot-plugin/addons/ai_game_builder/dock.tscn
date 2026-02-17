@@ -32,10 +32,10 @@ text = "Phase: Idle"
 
 [node name="PhaseProgress" type="ProgressBar" parent="PhaseSection"]
 custom_minimum_size = Vector2(0, 20)
-max_value = 6.0
+max_value = 7.0
 step = 1.0
 show_percentage = false
-tooltip_text = "Build progress: 6 phases total (Foundation, Abilities, Enemies, UI, Polish, QA)"
+tooltip_text = "Build progress: Phases 0-6 (PRD, Foundation, Abilities, Enemies, UI, Polish, QA)"
 
 [node name="PhaseStatusLabel" type="Label" parent="PhaseSection"]
 theme_override_font_sizes/font_size = 12
