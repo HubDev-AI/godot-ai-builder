@@ -211,6 +211,25 @@ Machine-readable output:
 node scripts/poc-quality-summary.mjs --json
 ```
 
+PoC baseline vs candidate benchmark comparison:
+
+```bash
+node scripts/poc-benchmark-compare.mjs \
+  --baseline-prefix baseline-2026-02-18 \
+  --candidate-prefix candidate-2026-02-18
+```
+
+Machine-readable comparison:
+
+```bash
+node scripts/poc-benchmark-compare.mjs \
+  --baseline-prefix baseline-2026-02-18 \
+  --candidate-prefix candidate-2026-02-18 \
+  --json
+```
+
+See also benchmark run procedure: `docs/poc/benchmark-runbook.md`.
+
 ## Project Structure
 
 ```
