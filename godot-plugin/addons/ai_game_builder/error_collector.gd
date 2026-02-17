@@ -62,30 +62,39 @@ func _validate_all_scripts():
 	var scripts: Array[String] = []
 	_find_scripts("res://", scripts)
 
-	# Two-pass validation: first load all scripts to populate the class_name
-	# cache, then check can_instantiate(). Single-pass with CACHE_MODE_REPLACE
-	# breaks class_name resolution because each script is parsed in isolation
-	# before its dependencies are loaded.
-	var loaded: Array[Dictionary] = []
+	# Two-pass validation:
+	# 1) Warm class_name cache by loading every script.
+	# 2) Force each loaded script to re-read source from disk + reload(), which
+	#    clears stale compile errors after external file edits.
+	# 3) Validate can_instantiate() from the refreshed script state.
 	for path in scripts:
-		var script = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE)
+		ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE)
+
+	var reload_status_by_path: Dictionary = {}
+	for path in scripts:
+		var script: GDScript = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE) as GDScript
 		if script == null:
+			reload_status_by_path[path] = FAILED
+			continue
+		if FileAccess.file_exists(path):
+			script.source_code = FileAccess.get_file_as_string(path)
+		reload_status_by_path[path] = script.reload(true)
+
+	for path in scripts:
+		var script: GDScript = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE) as GDScript
+		var reload_status: int = int(reload_status_by_path.get(path, FAILED))
+		if script == null or reload_status != OK:
 			_errors.append({
 				"message": "Failed to load script (parse error)",
 				"file": path,
 				"line": -1,
 				"timestamp": Time.get_unix_time_from_system(),
 			})
-		else:
-			loaded.append({"path": path, "script": script})
-
-	# Second pass: check compilation with all class_names now in cache
-	for entry in loaded:
-		var script: GDScript = entry.script as GDScript
-		if script and not script.can_instantiate():
+			continue
+		if not script.can_instantiate():
 			_errors.append({
 				"message": "Script has compilation errors",
-				"file": entry.path,
+				"file": path,
 				"line": -1,
 				"timestamp": Time.get_unix_time_from_system(),
 			})
@@ -167,6 +176,14 @@ func _parse_log_file(log_path: String):
 		var stripped = lines[i].strip_edges()
 		if stripped.is_empty():
 			continue
+		var lower = stripped.to_lower()
+
+		# Compile/parse failures are handled by active script validation.
+		# Skipping these here avoids stale one-cycle-late duplicates from log flushes.
+		if "parse error:" in lower or "parser error:" in lower:
+			continue
+		if "failed to load script" in lower or "cannot load source code from" in lower:
+			continue
 
 		# Check for error patterns (broad matching)
 		var is_error = false
@@ -174,9 +191,7 @@ func _parse_log_file(log_path: String):
 
 		if "ERROR:" in stripped or "SCRIPT ERROR:" in stripped:
 			is_error = true
-		elif "Parse Error:" in stripped or "Parser Error:" in stripped:
-			is_error = true
-		elif "error(" in stripped.to_lower() and "res://" in stripped:
+		elif "error(" in lower and "res://" in stripped:
 			is_error = true
 		elif "WARNING:" in stripped:
 			is_warning = true
@@ -214,21 +229,52 @@ func _parse_log_file(log_path: String):
 # ---------------------------------------------------------------------------
 
 func _extract_file_ref(text: String) -> Dictionary:
-	# Try to find "res://path/file.gd:123" pattern
+	# Prefer res:// references with line numbers.
 	var regex = RegEx.new()
-	regex.compile("(res://[\\w/.-]+\\.gd):(\\d+)")
+	regex.compile("(res://[\\w/.-]+\\.(?:gd|tscn|tres)):(\\d+)")
 	var result = regex.search(text)
 	if result:
 		return {
-			"file": result.get_string(1),
+			"file": _to_project_res_path(result.get_string(1)),
 			"line": result.get_string(2).to_int(),
 		}
-	# Also try "res://path/file.tscn" without line number
+
+	# Headless "--script" often reports absolute file paths:
+	# "/abs/path/file.gd:42" or "C:\path\file.gd:42".
+	regex.compile("((?:[A-Za-z]:)?[\\\\/][^:\\n\\r\\\"')]+\\.gd):(\\d+)")
+	result = regex.search(text)
+	if result:
+		return {
+			"file": _to_project_res_path(result.get_string(1)),
+			"line": result.get_string(2).to_int(),
+		}
+
+	# Also try file paths without line numbers.
 	regex.compile("(res://[\\w/.-]+\\.(?:gd|tscn|tres))")
 	result = regex.search(text)
 	if result:
-		return {"file": result.get_string(1), "line": -1}
+		return {"file": _to_project_res_path(result.get_string(1)), "line": -1}
+
+	regex.compile("((?:[A-Za-z]:)?[\\\\/][^\\n\\r\\\"')]+\\.(?:gd|tscn|tres))")
+	result = regex.search(text)
+	if result:
+		return {"file": _to_project_res_path(result.get_string(1)), "line": -1}
+
 	return {}
+
+
+func _to_project_res_path(path: String) -> String:
+	if path.is_empty() or path.begins_with("res://"):
+		return path
+
+	var normalized_path: String = path.replace("\\", "/")
+	var project_root: String = ProjectSettings.globalize_path("res://").replace("\\", "/")
+	if not project_root.ends_with("/"):
+		project_root += "/"
+
+	if normalized_path.begins_with(project_root):
+		return "res://" + normalized_path.substr(project_root.length())
+	return normalized_path
 
 
 ## Runs a headless Godot process to get detailed script error messages with
@@ -239,27 +285,44 @@ func get_detailed_errors() -> Array[Dictionary]:
 	var project_path: String = ProjectSettings.globalize_path("res://")
 
 	var output: Array = []
-	var exit_code: int = OS.execute(
+	OS.execute(
 		godot_path,
 		PackedStringArray(["--headless", "--path", project_path, "--quit"]),
 		output,
-		true   # read_stderr — error messages go to stderr
+		true  # read_stderr — error messages go to stderr
 	)
 
-	if output.is_empty():
-		# Headless validation produced no output — fall back to basic errors
-		return get_errors()
+	var full_output: String = _join_process_output(output)
+	var parsed_headless: Array[Dictionary] = _parse_headless_errors(full_output)
+	if not parsed_headless.is_empty() and not _all_errors_missing_line_info(parsed_headless):
+		return parsed_headless
 
+	var basic_errors: Array[Dictionary] = get_errors()
+	var script_probe_errors: Array[Dictionary] = _probe_scripts_for_detailed_errors(
+		godot_path,
+		project_path,
+		basic_errors
+	)
+	if not script_probe_errors.is_empty():
+		return script_probe_errors
+
+	if not parsed_headless.is_empty():
+		return parsed_headless
+	return basic_errors
+
+
+func _join_process_output(output: Array) -> String:
+	if output.is_empty():
+		return ""
 	var output_parts: PackedStringArray = []
 	for part in output:
 		output_parts.append(str(part))
-	var full_output: String = "\n".join(output_parts)
+	return "\n".join(output_parts)
+
+
+func _parse_headless_errors(full_output: String) -> Array[Dictionary]:
 	if full_output.strip_edges().is_empty():
-		return get_errors()
-	# If Godot failed to run and produced no parse/runtime errors we can use,
-	# prefer the fast in-process validation.
-	if exit_code != 0 and not ("SCRIPT ERROR:" in full_output or "Parse Error:" in full_output or "Parser Error:" in full_output):
-		return get_errors()
+		return []
 
 	var errors: Array[Dictionary] = []
 	var lines: PackedStringArray = full_output.split("\n")
@@ -304,19 +367,79 @@ func get_detailed_errors() -> Array[Dictionary]:
 			"line": file_ref.get("line", -1),
 		})
 
-	# Deduplicate
+	return _deduplicate_entries(errors, 120)
+
+
+func _all_errors_missing_line_info(entries: Array[Dictionary]) -> bool:
+	if entries.is_empty():
+		return true
+	for entry in entries:
+		if int(entry.get("line", -1)) >= 0:
+			return false
+	return true
+
+
+func _probe_scripts_for_detailed_errors(
+	godot_path: String,
+	project_path: String,
+	basic_errors: Array[Dictionary]
+) -> Array[Dictionary]:
+	var candidates: Array[String] = []
+	for err in basic_errors:
+		var path: String = str(err.get("file", ""))
+		if path.is_empty() or not path.ends_with(".gd"):
+			continue
+		var msg: String = str(err.get("message", "")).to_lower()
+		if not (
+			"compilation" in msg
+			or "parse error" in msg
+			or "failed to load script" in msg
+		):
+			continue
+		if not candidates.has(path):
+			candidates.append(path)
+
+	if candidates.is_empty():
+		return []
+
+	# Keep this bounded so detailed checks do not explode on very large projects.
+	if candidates.size() > 8:
+		candidates = candidates.slice(0, 8)
+
+	var combined: Array[Dictionary] = []
+	for script_path in candidates:
+		var output: Array = []
+		OS.execute(
+			godot_path,
+			PackedStringArray([
+				"--headless",
+				"--path",
+				project_path,
+				"--script",
+				script_path,
+				"--quit",
+			]),
+			output,
+			true
+		)
+
+		var parsed: Array[Dictionary] = _parse_headless_errors(_join_process_output(output))
+		for err in parsed:
+			if str(err.get("file", "")).is_empty():
+				err["file"] = script_path
+			combined.append(err)
+
+	return _deduplicate_entries(combined, 120)
+
+
+func _deduplicate_entries(entries: Array[Dictionary], message_prefix_len: int) -> Array[Dictionary]:
 	var seen: Dictionary = {}
 	var unique: Array[Dictionary] = []
-	for err in errors:
-		var key: String = err.get("file", "") + "|" + err.get("message", "").left(120)
+	for entry in entries:
+		var key: String = str(entry.get("file", "")) + "|" + str(entry.get("message", "")).left(message_prefix_len)
 		if not seen.has(key):
 			seen[key] = true
-			unique.append(err)
-
-	# If headless gave us nothing useful, fall back to basic can_instantiate() list
-	if unique.is_empty():
-		return get_errors()
-
+			unique.append(entry)
 	return unique
 
 
