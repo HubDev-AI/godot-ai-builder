@@ -121,6 +121,10 @@ Available MCP tools:
 - `godot_parse_scene` — Parse .tscn file structure
 - `godot_scan_project_files` — List all project files
 - `godot_read_project_setting` — Read project.godot values
+- `godot_list_addons` — List curated add-ons from the catalog
+- `godot_install_addon` — Install a curated add-on into the current project
+- `godot_verify_addon` — Verify add-on health (required files/signals)
+- `godot_apply_integration_pack` — Apply a curated integration pack (PoC: `pack_polish`)
 - `godot_log` — **Send a message to the Godot dock panel** (call CONSTANTLY for user visibility)
 - `godot_save_build_state` — **Save build checkpoint** (phase progress, files written, quality gates)
 - `godot_get_build_state` — **Load build checkpoint** (check for interrupted builds at session start)

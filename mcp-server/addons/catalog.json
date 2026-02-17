@@ -1,0 +1,33 @@
+{
+  "version": "poc-v1",
+  "addons": [
+    {
+      "id": "phantom_camera",
+      "name": "Phantom Camera",
+      "category": "polish_camera",
+      "source_url": "https://github.com/ramokz/phantom-camera.git",
+      "install_method": "git_clone_subdir",
+      "source_subdir": "addons/phantom_camera",
+      "target_dir": "addons/phantom_camera",
+      "godot_min": "4.0",
+      "godot_max": "4.x",
+      "license": "MIT",
+      "health": "maintained",
+      "verification": {
+        "required_files": [
+          "addons/phantom_camera/plugin.cfg",
+          "addons/phantom_camera/plugin.gd"
+        ]
+      }
+    }
+  ],
+  "integration_packs": [
+    {
+      "id": "pack_polish",
+      "description": "Install and verify the baseline polish/camera add-on stack for PoC.",
+      "required_addon_ids": [
+        "phantom_camera"
+      ]
+    }
+  ]
+}

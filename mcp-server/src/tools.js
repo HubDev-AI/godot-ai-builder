@@ -1,8 +1,10 @@
 /**
  * MCP Tool definitions and handlers for Godot AI Game Builder.
  */
-import { readdir, readFile, writeFile, mkdir, stat } from "fs/promises";
-import { resolve, extname, relative } from "path";
+import { readdir, readFile, writeFile, mkdir, stat, cp, rm } from "fs/promises";
+import { resolve, extname, relative, dirname } from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import * as bridge from "./godot-bridge.js";
 import { parseScene, resToAbsolute } from "./scene-parser.js";
 import {
@@ -13,6 +15,10 @@ import {
 
 const PROJECT_PATH = process.env.GODOT_PROJECT_PATH || ".";
 const QUALITY_REPORTS_DIR = resolve(PROJECT_PATH, ".claude", "quality_reports");
+const INTEGRATION_PACK_REPORTS_DIR = resolve(PROJECT_PATH, ".claude", "integration_packs");
+const ADDON_CATALOG_PATH = new URL("../addons/catalog.json", import.meta.url);
+const execFileAsync = promisify(execFile);
+let addonCatalogCache = null;
 
 // ---------------------------------------------------------------------------
 // Tool definitions (MCP schema)
@@ -249,6 +255,76 @@ export const TOOL_DEFINITIONS = [
         },
       },
       required: ["key"],
+    },
+  },
+  {
+    name: "godot_list_addons",
+    description:
+      "List curated add-ons from the internal catalog with compatibility metadata. Use this before selecting integration packs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          description: "Optional category filter (e.g. polish_camera)",
+        },
+      },
+    },
+  },
+  {
+    name: "godot_install_addon",
+    description:
+      "Install a curated add-on into the current project using catalog metadata. Returns verification status and remediation on failure.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        addon_id: {
+          type: "string",
+          description: "Catalog add-on ID (e.g. phantom_camera)",
+        },
+        force: {
+          type: "boolean",
+          description:
+            "Reinstall even when the add-on already verifies (default: false).",
+        },
+      },
+      required: ["addon_id"],
+    },
+  },
+  {
+    name: "godot_verify_addon",
+    description:
+      "Verify that a curated add-on is installed by checking required files and project signals.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        addon_id: {
+          type: "string",
+          description: "Catalog add-on ID to verify",
+        },
+      },
+      required: ["addon_id"],
+    },
+  },
+  {
+    name: "godot_apply_integration_pack",
+    description:
+      "Apply a curated integration pack. For PoC, pack_polish installs and verifies Phantom Camera. In strict mode, this fails loudly when required add-ons are unhealthy.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack_id: {
+          type: "string",
+          enum: ["pack_polish"],
+          description: "Integration pack ID",
+        },
+        strict: {
+          type: "boolean",
+          description:
+            "When true (default), reject the pack if any required add-on fails.",
+        },
+      },
+      required: ["pack_id"],
     },
   },
   {
@@ -515,6 +591,14 @@ export async function handleToolCall(name, args) {
       return await toolScanProjectFiles(args.extensions);
     case "godot_read_project_setting":
       return await toolReadProjectSetting(args.key);
+    case "godot_list_addons":
+      return await toolListAddons(args.category || "");
+    case "godot_install_addon":
+      return await toolInstallAddon(args.addon_id, args.force === true);
+    case "godot_verify_addon":
+      return await toolVerifyAddon(args.addon_id);
+    case "godot_apply_integration_pack":
+      return await toolApplyIntegrationPack(args.pack_id, args.strict !== false);
     case "godot_log":
       return await toolLog(args.message);
     case "godot_save_build_state":
@@ -740,6 +824,235 @@ async function toolReadProjectSetting(key) {
     return { key, found: false, value: null };
   }
   return { key, found: true, value };
+}
+
+async function toolListAddons(category) {
+  const catalog = await loadAddonCatalog();
+  let addons = catalog.addons || [];
+  if (category) {
+    addons = addons.filter((addon) => addon.category === category);
+  }
+
+  await bridge.sendLog(
+    `[MCP] Listing curated add-ons${category ? ` in '${category}'` : ""}: ${addons.length}`
+  );
+
+  return {
+    ok: true,
+    catalog_version: catalog.version || "unknown",
+    total: addons.length,
+    addons,
+  };
+}
+
+async function toolInstallAddon(addonId, force = false) {
+  const catalog = await loadAddonCatalog();
+  const addon = findCatalogAddon(catalog, addonId);
+  if (!addon) {
+    await bridge.sendLog(`[MCP] Unknown addon_id: ${addonId}`);
+    return {
+      ok: false,
+      addon_id: addonId,
+      reason: `Unknown addon_id '${addonId}'. Call godot_list_addons first.`,
+    };
+  }
+
+  if (addon.install_method !== "git_clone_subdir") {
+    await bridge.sendLog(
+      `[MCP] Unsupported install method '${addon.install_method}' for addon '${addon.id}'`
+    );
+    return {
+      ok: false,
+      addon_id: addon.id,
+      reason: `Unsupported install method '${addon.install_method}'.`,
+    };
+  }
+
+  const preVerify = await verifyCatalogAddon(addon);
+  if (preVerify.passed && !force) {
+    await bridge.sendLog(
+      `[MCP] Add-on '${addon.id}' already installed and verified`
+    );
+    return {
+      ok: true,
+      addon_id: addon.id,
+      already_installed: true,
+      verification: preVerify,
+    };
+  }
+
+  const targetPath = resolveProjectPath(addon.target_dir);
+  const tmpRoot = resolve(
+    PROJECT_PATH,
+    ".claude",
+    "tmp",
+    `addon_${addon.id}_${Date.now()}`
+  );
+  const tmpCheckout = resolve(tmpRoot, "checkout");
+
+  await bridge.sendLog(
+    `[MCP] Installing add-on '${addon.id}' from ${addon.source_url}...`
+  );
+
+  try {
+    await mkdir(tmpRoot, { recursive: true });
+    await execFileAsync(
+      "git",
+      ["clone", "--depth", "1", addon.source_url, tmpCheckout],
+      {
+        cwd: PROJECT_PATH,
+        timeout: 120000,
+        maxBuffer: 8 * 1024 * 1024,
+      }
+    );
+
+    const sourcePath = resolve(tmpCheckout, addon.source_subdir);
+    if (!(await fileExists(sourcePath))) {
+      throw new Error(
+        `Catalog source_subdir missing after clone: ${addon.source_subdir}`
+      );
+    }
+
+    if (force) {
+      await rm(targetPath, { recursive: true, force: true });
+    }
+    await mkdir(dirname(targetPath), { recursive: true });
+    await cp(sourcePath, targetPath, { recursive: true, force: true });
+  } catch (err) {
+    await bridge.sendLog(
+      `[MCP] Add-on install failed for '${addon.id}': ${err.message}`
+    );
+    return {
+      ok: false,
+      addon_id: addon.id,
+      install_attempted: true,
+      reason: `Install failed: ${err.message}`,
+      remediation: [
+        `Verify network access and git availability, then retry godot_install_addon('${addon.id}').`,
+        `Manual fallback: clone '${addon.source_url}' and copy '${addon.source_subdir}' to 'res://${addon.target_dir}'.`,
+      ],
+    };
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+
+  const verification = await verifyCatalogAddon(addon);
+  if (!verification.passed) {
+    await bridge.sendLog(
+      `[MCP] Add-on install completed but verification failed for '${addon.id}'`
+    );
+    return {
+      ok: false,
+      addon_id: addon.id,
+      install_attempted: true,
+      verification,
+      reason: "Install completed but required files are still missing.",
+      remediation: verification.remediation,
+    };
+  }
+
+  await bridge.sendLog(`[MCP] ✓ Add-on '${addon.id}' installed and verified`);
+  return {
+    ok: true,
+    addon_id: addon.id,
+    install_attempted: true,
+    verification,
+  };
+}
+
+async function toolVerifyAddon(addonId) {
+  const catalog = await loadAddonCatalog();
+  const addon = findCatalogAddon(catalog, addonId);
+  if (!addon) {
+    await bridge.sendLog(`[MCP] Unknown addon_id: ${addonId}`);
+    return {
+      ok: false,
+      addon_id: addonId,
+      reason: `Unknown addon_id '${addonId}'. Call godot_list_addons first.`,
+    };
+  }
+
+  const verification = await verifyCatalogAddon(addon);
+  await bridge.sendLog(
+    `[MCP] Verification '${addon.id}': ${verification.passed ? "passed" : "failed"}`
+  );
+  return {
+    ok: verification.passed,
+    addon_id: addon.id,
+    verification,
+  };
+}
+
+async function toolApplyIntegrationPack(packId, strict = true) {
+  const catalog = await loadAddonCatalog();
+  const pack = findCatalogPack(catalog, packId);
+  if (!pack) {
+    await bridge.sendLog(`[MCP] Unknown integration pack: ${packId}`);
+    return {
+      ok: false,
+      rejected: true,
+      pack_id: packId,
+      reason: `Unknown integration pack '${packId}'.`,
+    };
+  }
+
+  await bridge.sendLog(
+    `[MCP] Applying integration pack '${pack.id}' (${pack.required_addon_ids.length} required add-on(s))...`
+  );
+
+  const results = [];
+  for (const addonId of pack.required_addon_ids) {
+    const install = await toolInstallAddon(addonId, false);
+    const verify = await toolVerifyAddon(addonId);
+    results.push({
+      addon_id: addonId,
+      install,
+      verify,
+      ok: Boolean(install.ok && verify.ok),
+    });
+  }
+
+  const failed = results.filter((result) => !result.ok);
+  const reportPath = await persistIntegrationPackReport({
+    pack_id: pack.id,
+    strict_mode: strict,
+    ok: failed.length === 0,
+    results,
+  });
+
+  if (strict && failed.length > 0) {
+    await bridge.sendLog(
+      `[MCP] ⛔ Integration pack '${pack.id}' rejected — ${failed.length} required add-on(s) unhealthy`
+    );
+    return {
+      ok: false,
+      rejected: true,
+      pack_id: pack.id,
+      strict_mode: true,
+      failed_addons: failed.map((item) => item.addon_id),
+      reason:
+        `INTEGRATION PACK BLOCKED: ${failed.length} required add-on(s) failed install/verification.`,
+      remediation: [
+        "Inspect per-addon failures in results and fix install issues first.",
+        "Retry with godot_apply_integration_pack(pack_id, true) after failures are resolved.",
+      ],
+      report_path: reportPath,
+      results,
+    };
+  }
+
+  await bridge.sendLog(
+    `[MCP] ✓ Integration pack '${pack.id}' applied${failed.length > 0 ? " (non-strict mode with failures)" : ""}`
+  );
+  return {
+    ok: failed.length === 0,
+    rejected: false,
+    pack_id: pack.id,
+    strict_mode: strict,
+    failed_addons: failed.map((item) => item.addon_id),
+    report_path: reportPath,
+    results,
+  };
 }
 
 async function toolLog(message) {
@@ -1164,6 +1477,79 @@ async function readProjectGodot() {
   return settings;
 }
 
+async function loadAddonCatalog() {
+  if (addonCatalogCache) return addonCatalogCache;
+
+  const content = await readFile(ADDON_CATALOG_PATH, "utf-8");
+  const parsed = JSON.parse(content);
+
+  if (!parsed || !Array.isArray(parsed.addons) || !Array.isArray(parsed.integration_packs)) {
+    throw new Error("Invalid add-on catalog format");
+  }
+
+  addonCatalogCache = parsed;
+  return addonCatalogCache;
+}
+
+function findCatalogAddon(catalog, addonId) {
+  if (!catalog || !Array.isArray(catalog.addons)) return null;
+  return catalog.addons.find((addon) => addon.id === addonId) || null;
+}
+
+function findCatalogPack(catalog, packId) {
+  if (!catalog || !Array.isArray(catalog.integration_packs)) return null;
+  return catalog.integration_packs.find((pack) => pack.id === packId) || null;
+}
+
+async function verifyCatalogAddon(addon) {
+  const requiredFiles = addon?.verification?.required_files || [];
+  const presentFiles = [];
+  const missingFiles = [];
+
+  for (const relPath of requiredFiles) {
+    const absPath = resolveProjectPath(relPath);
+    if (await fileExists(absPath)) {
+      presentFiles.push(`res://${relPath}`);
+    } else {
+      missingFiles.push(`res://${relPath}`);
+    }
+  }
+
+  const settings = await readProjectGodot();
+  const enabledRaw = settings["editor_plugins/enabled"] || "";
+  const pluginCfgResPath = `res://${addon.target_dir}/plugin.cfg`;
+  const plugin_listed_in_project_settings =
+    typeof enabledRaw === "string" && enabledRaw.includes(pluginCfgResPath);
+  const passed = missingFiles.length === 0;
+
+  return {
+    passed,
+    required_files: requiredFiles.map((relPath) => `res://${relPath}`),
+    present_files: presentFiles,
+    missing_files: missingFiles,
+    plugin_listed_in_project_settings,
+    remediation: passed
+      ? []
+      : [
+          `Re-run godot_install_addon('${addon.id}') or install manually from ${addon.source_url}.`,
+          `Ensure required files exist under res://${addon.target_dir}.`,
+        ],
+  };
+}
+
+function resolveProjectPath(pathLike) {
+  const clean = String(pathLike || "")
+    .replace(/^res:\/\//, "")
+    .replace(/^\/+/, "");
+  const abs = resolve(PROJECT_PATH, clean);
+  const projectRoot = resolve(PROJECT_PATH);
+  const relToRoot = relative(projectRoot, abs);
+  if (relToRoot.startsWith("..") || relToRoot === "") {
+    throw new Error(`Path escapes project root: ${pathLike}`);
+  }
+  return abs;
+}
+
 async function evaluatePhaseQualityGates(
   phaseNumber,
   phaseName = "",
@@ -1566,6 +1952,27 @@ async function persistQualityReport(report, trigger, meta = {}) {
     await mkdir(QUALITY_REPORTS_DIR, { recursive: true });
     await writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
     return `res://.claude/quality_reports/${fileName}`;
+  } catch {
+    return "";
+  }
+}
+
+async function persistIntegrationPackReport(report) {
+  const timestampIso = new Date().toISOString();
+  const timestampSlug = timestampIso.replace(/[:.]/g, "-");
+  const packId = report?.pack_id || "unknown_pack";
+  const fileName = `${timestampSlug}-${packId}.json`;
+  const filePath = resolve(INTEGRATION_PACK_REPORTS_DIR, fileName);
+  const payload = {
+    version: "1.0",
+    generated_at: timestampIso,
+    report,
+  };
+
+  try {
+    await mkdir(INTEGRATION_PACK_REPORTS_DIR, { recursive: true });
+    await writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
+    return `res://.claude/integration_packs/${fileName}`;
   } catch {
     return "";
   }
