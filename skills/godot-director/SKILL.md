@@ -340,18 +340,33 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 
 **This is the #1 rule for preventing cascading errors. Violating this WILL break the build.**
 
-```
-MANDATORY EXECUTION PATTERN (every phase, no exceptions):
+### HARD GATES — The MCP tools ENFORCE these rules automatically:
 
+1. **`godot_reload_filesystem()` auto-checks errors.** After every reload, the tool automatically
+   runs an error check and returns `_error_count` and `_action_required` in the response. If errors
+   exist, you MUST stop and fix them before writing more files.
+
+2. **`godot_update_phase(N, name, "completed")` REJECTS if errors exist.** When you try to mark
+   a phase as completed, the tool automatically validates. If ANY compilation errors exist, the
+   phase completion is REJECTED — the tool returns `{ok: false, rejected: true}` and keeps the
+   phase as "in_progress". You cannot advance until zero errors.
+
+3. **Every MCP tool response includes `_error_count`.** You always know how many errors exist.
+   If `_error_count > 0`, stop what you're doing and fix errors first.
+
+### MANDATORY EXECUTION PATTERN (every phase, no exceptions):
+
+```
 1. Write script A
-2. godot_reload_filesystem() + godot_get_errors()
-3. If errors in A: fix them NOW before writing anything else
+2. godot_reload_filesystem()  ← response includes _error_count
+3. If _error_count > 0: call godot_get_errors(), fix them NOW
 4. Write script B
-5. godot_reload_filesystem() + godot_get_errors()
-6. If errors in A or B: fix them NOW
+5. godot_reload_filesystem()  ← response includes _error_count
+6. If _error_count > 0: fix them NOW
 7. Repeat for each subsequent script
 
-⛔ NEVER write more than 2 scripts without running godot_get_errors()
+⛔ NEVER write more than 2 scripts without running godot_reload_filesystem()
+⛔ NEVER ignore _error_count or _action_required in tool responses
 ⛔ If you write 3+ scripts without testing, you WILL get cascading errors
 ⛔ Cascading errors are 10x harder to fix than individual errors
 ```
@@ -362,7 +377,7 @@ can't tell which is the ROOT error and which are cascading. Testing after every 
 catches errors when they're isolated and easy to fix.
 
 **Sub-agents must also follow this protocol.** If a sub-agent writes 3 scripts without testing,
-it has violated the protocol.
+it has violated the protocol. Sub-agents see the same `_error_count` in tool responses.
 
 ---
 
