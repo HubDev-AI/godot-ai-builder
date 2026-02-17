@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://godot-ai-builder.local/schemas/poc-quality-report-v1.json",
+  "title": "PoC Quality Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "poc-quality-report-v1"
+    },
+    "benchmark_id": {
+      "type": "string",
+      "enum": [
+        "poc_prompt_01",
+        "poc_prompt_02",
+        "poc_prompt_03"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "max_iterations": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "iteration_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "objective_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gates_passed": {
+          "type": "boolean"
+        },
+        "failed_quality_gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quality_report_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "gates_passed",
+        "failed_quality_gates",
+        "quality_report_paths"
+      ]
+    },
+    "hard_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zero_script_errors": {
+          "type": "boolean"
+        },
+        "no_critical_warnings": {
+          "type": "boolean"
+        },
+        "play_loop_complete": {
+          "type": "boolean"
+        },
+        "controls_clear": {
+          "type": "boolean"
+        },
+        "no_soft_lock": {
+          "type": "boolean"
+        },
+        "quality_gates_passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "zero_script_errors",
+        "no_critical_warnings",
+        "play_loop_complete",
+        "controls_clear",
+        "no_soft_lock",
+        "quality_gates_passed"
+      ]
+    },
+    "anti_tutorial_visual_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "named_art_direction": {
+          "type": "boolean"
+        },
+        "palette_discipline": {
+          "type": "boolean"
+        },
+        "silhouette_readability": {
+          "type": "boolean"
+        },
+        "layering_depth": {
+          "type": "boolean"
+        },
+        "feedback_clarity": {
+          "type": "boolean"
+        },
+        "ui_theme_consistency": {
+          "type": "boolean"
+        },
+        "no_raw_placeholder_feel": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "named_art_direction",
+        "palette_discipline",
+        "silhouette_readability",
+        "layering_depth",
+        "feedback_clarity",
+        "ui_theme_consistency",
+        "no_raw_placeholder_feel"
+      ]
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "core_loop_fun": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "controls_game_feel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "progression_variety": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "encounter_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "visual_polish_cohesion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "ux_onboarding_feedback": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      },
+      "required": [
+        "core_loop_fun",
+        "controls_game_feel",
+        "progression_variety",
+        "encounter_depth",
+        "visual_polish_cohesion",
+        "ux_onboarding_feedback"
+      ]
+    },
+    "weighted_total_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "category_min_pass": {
+      "type": "boolean"
+    },
+    "two_categories_at_least_four": {
+      "type": "boolean"
+    },
+    "signature_moments": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "very_good_status": {
+      "type": "boolean"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "go",
+        "needs_iteration",
+        "no_go"
+      ]
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 3
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "benchmark_id",
+    "run_id",
+    "timestamp_utc",
+    "max_iterations",
+    "iteration_count",
+    "objective_quality",
+    "hard_gates",
+    "anti_tutorial_visual_checks",
+    "scores",
+    "weighted_total_score",
+    "category_min_pass",
+    "two_categories_at_least_four",
+    "signature_moments",
+    "very_good_status",
+    "verdict",
+    "next_actions"
+  ]
+}
