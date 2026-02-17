@@ -8,6 +8,14 @@ description: |
 
 # Genre Templates
 
+## Template Bootstrap (MANDATORY)
+
+Before writing gameplay scripts for any template:
+1. Call `godot_generate_asset_pack` with the closest preset and style.
+2. Verify generated files in `res://assets/sprites/`.
+3. Wire entities to generated sprites first, then layered procedural fallback.
+4. Do not use plain `ColorRect` entity visuals in full-game builds.
+
 ## Top-Down Shooter
 
 ### File Manifest
@@ -24,15 +32,16 @@ description: |
 ### Node Hierarchy (built by main.gd)
 ```
 Main (Node2D + main.gd)
-├── Background (ColorRect, dark)
+├── Background (Sprite2D using bg_arena + optional gradient shader)
 ├── Player (CharacterBody2D + player.gd)
 │   ├── CollisionShape2D (rect 32x32)
-│   └── Visual (ColorRect blue)
+│   └── Visual (Sprite2D: player + glow/outline shader)
 ├── SpawnTimer (Timer, 1.5s)
 ├── Camera2D (follows player)
 └── UI (CanvasLayer)
-    ├── ScoreLabel
-    └── HealthBar
+    ├── HudPanel (TextureRect/Sprite2D from ui_hud_panel)
+    ├── ScoreLabel (+ icon_score)
+    └── HealthBar (+ icon_heart)
 ```
 
 ### Key Mechanics
@@ -42,6 +51,7 @@ Main (Node2D + main.gd)
 - Score: +100 per kill, displayed in HUD
 - Health: 100 HP, -10 per enemy contact, game over at 0
 - Spawning: every 1.5s, random position 500px from player, max 15
+- Asset baseline: generate and use `player`, `enemy_chaser`, `enemy_ranged`, `enemy_charger`, `bullet_player`, `pickup_health`, `icon_heart`, `icon_score`, `bg_arena`, `ui_hud_panel`
 
 ---
 
@@ -66,10 +76,10 @@ Main (Node2D + main.gd)
 │   └── [Spike Area2Ds, generated]
 ├── Player (CharacterBody2D + player.gd)
 │   ├── CollisionShape2D (capsule)
-│   ├── Visual (ColorRect blue)
+│   ├── Visual (Sprite2D: player_runner or layered procedural fallback)
 │   └── Camera2D
 └── UI (CanvasLayer)
-    ├── CoinLabel
+    ├── CoinLabel (+ icon_life or coin icon)
     └── LivesLabel
 ```
 
@@ -107,6 +117,7 @@ func build():
 - Coins: Area2D layer 7, body_entered → collect
 - Spikes: Area2D layer 8, body_entered → respawn
 - Camera follows player with smoothing
+- Asset baseline: `player_runner`, `enemy_patrol`, `enemy_flyer`, `pickup_coin`, `tile_ground`, `tile_platform`, `tile_hazard`, `bg_platform_sky`
 
 ---
 

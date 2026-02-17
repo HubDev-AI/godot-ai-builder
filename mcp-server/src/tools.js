@@ -5,7 +5,11 @@ import { readdir, readFile, writeFile, mkdir, stat } from "fs/promises";
 import { resolve, extname, relative } from "path";
 import * as bridge from "./godot-bridge.js";
 import { parseScene, resToAbsolute } from "./scene-parser.js";
-import { generatePlaceholder, generatePng } from "./asset-generator.js";
+import {
+  generatePlaceholder,
+  generatePng,
+  generateAssetPack,
+} from "./asset-generator.js";
 
 const PROJECT_PATH = process.env.GODOT_PROJECT_PATH || ".";
 
@@ -87,15 +91,15 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_generate_asset",
     description:
-      "Generate a placeholder sprite asset (SVG or PNG) for prototyping. Produces simple colored shapes appropriate for the asset type. Godot imports SVGs natively.",
+      "Generate a polished sprite asset (SVG or PNG) with layered shading, highlights, and outlines. Use for production-ready placeholders, not flat shapes.",
     inputSchema: {
       type: "object",
       properties: {
         name: { type: "string", description: "Asset filename (no extension)" },
-        width: { type: "number", description: "Width in pixels (default: 32)" },
+        width: { type: "number", description: "Width in pixels (default: 64)" },
         height: {
           type: "number",
-          description: "Height in pixels (default: 32)",
+          description: "Height in pixels (default: 64)",
         },
         type: {
           type: "string",
@@ -109,8 +113,15 @@ export const TOOL_DEFINITIONS = [
             "npc",
             "item",
             "ui",
+            "boss",
+            "pickup",
           ],
           description: "Asset type — determines shape and default color",
+        },
+        style: {
+          type: "string",
+          enum: ["sci-fi", "fantasy", "minimal", "neon", "dark"],
+          description: "Visual style preset (default: sci-fi)",
         },
         color: {
           type: "string",
@@ -127,6 +138,85 @@ export const TOOL_DEFINITIONS = [
         },
       },
       required: ["name", "type"],
+    },
+  },
+  {
+    name: "godot_generate_asset_pack",
+    description:
+      "Generate a coherent set of assets for a game genre in one call (player, enemies, projectiles, pickups, UI icons, backgrounds). Preferred for full-game builds.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        preset: {
+          type: "string",
+          enum: [
+            "top_down_shooter",
+            "arena_survivor",
+            "platformer",
+            "rpg",
+            "tower_defense",
+          ],
+          description: "Genre preset for default asset list",
+        },
+        style: {
+          type: "string",
+          enum: ["sci-fi", "fantasy", "minimal", "neon", "dark"],
+          description: "Visual style preset (default: sci-fi)",
+        },
+        format: {
+          type: "string",
+          enum: ["svg", "png"],
+          description: "Output format (default: svg)",
+        },
+        output_dir: {
+          type: "string",
+          description: "Output directory (default: res://assets/sprites)",
+        },
+        include_background: {
+          type: "boolean",
+          description: "Include background assets (default: true)",
+        },
+        include_ui: {
+          type: "boolean",
+          description: "Include UI/icon assets (default: true)",
+        },
+        prefix: {
+          type: "string",
+          description:
+            "Optional filename prefix to avoid collisions (e.g. run1, cyber)",
+        },
+        assets: {
+          type: "array",
+          description:
+            "Optional custom asset list. If provided, overrides preset entries.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              type: {
+                type: "string",
+                enum: [
+                  "character",
+                  "enemy",
+                  "projectile",
+                  "tile",
+                  "icon",
+                  "background",
+                  "npc",
+                  "item",
+                  "ui",
+                  "boss",
+                  "pickup",
+                ],
+              },
+              width: { type: "number" },
+              height: { type: "number" },
+              color: { type: "string" },
+            },
+            required: ["name", "type"],
+          },
+        },
+      },
     },
   },
   {
@@ -374,6 +464,8 @@ export async function handleToolCall(name, args) {
       return await toolParseScene(args.scene_path);
     case "godot_generate_asset":
       return await toolGenerateAsset(args);
+    case "godot_generate_asset_pack":
+      return await toolGenerateAssetPack(args);
     case "godot_scan_project_files":
       return await toolScanProjectFiles(args.extensions);
     case "godot_read_project_setting":
@@ -502,7 +594,9 @@ async function toolParseScene(scenePath) {
 
 async function toolGenerateAsset(args) {
   const fmt = args.format || "svg";
-  await bridge.sendLog(`[MCP] Generating ${fmt} asset: ${args.name} (${args.type})`);
+  await bridge.sendLog(
+    `[MCP] Generating ${fmt} asset: ${args.name} (${args.type})`
+  );
   let result;
   if (args.format === "png") {
     result = await generatePng(args);
@@ -510,6 +604,27 @@ async function toolGenerateAsset(args) {
     result = await generatePlaceholder(args);
   }
   await bridge.sendLog(`[MCP] Asset created: ${args.name}.${fmt}`);
+  return result;
+}
+
+async function toolGenerateAssetPack(args) {
+  const preset = args.preset || "top_down_shooter";
+  const fmt = args.format || "svg";
+  const style = args.style || "sci-fi";
+
+  await bridge.sendLog(
+    `[MCP] Generating asset pack: ${preset} (${style}, ${fmt})...`
+  );
+  const result = await generateAssetPack(args || {});
+  const generatedNames = (result.generated || [])
+    .slice(0, 6)
+    .map((a) => a.name)
+    .join(", ");
+  await bridge.sendLog(
+    `[MCP] Asset pack created: ${result.total} assets${
+      generatedNames ? ` (${generatedNames}${result.total > 6 ? ", ..." : ""})` : ""
+    }`
+  );
   return result;
 }
 

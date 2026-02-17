@@ -514,16 +514,30 @@ func _setup_sprite(node: Node2D, sprite_name: String, fallback_color: Color):
         node.add_child(visual)
 ```
 
-## MCP Asset Tool (for generated SVGs)
+## MCP Asset Tools
 
-The `godot_generate_asset` MCP tool produces SVGs. These are fine for prototyping but
-should be ENHANCED with shaders (glow outline, etc.) after loading:
+Use the MCP tools in this order for full-game builds:
+1. `godot_generate_asset_pack` to create a coherent baseline set for the genre
+2. `godot_generate_asset` for missing/special assets
+
+The generated sprites should still be ENHANCED with shaders (glow outline, etc.) after loading:
 
 ```gdscript
 var sprite = Sprite2D.new()
 sprite.texture = load("res://assets/sprites/player.svg")
 _apply_glow_outline(sprite, Color(0, 0.8, 1.0))
 node.add_child(sprite)
+```
+
+Example asset-pack call (top-down shooter):
+```json
+{
+  "preset": "top_down_shooter",
+  "style": "neon",
+  "format": "svg",
+  "include_background": true,
+  "include_ui": true
+}
 ```
 
 ## Visual Quality Checklist

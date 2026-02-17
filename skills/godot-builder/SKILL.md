@@ -116,7 +116,8 @@ Available MCP tools:
 - `godot_run_scene` — Run the game in the editor
 - `godot_stop_scene` — Stop the running game
 - `godot_get_errors` — Read editor error log
-- `godot_generate_asset` — Generate SVG/PNG placeholder sprites
+- `godot_generate_asset` — Generate polished SVG/PNG sprites for individual entities
+- `godot_generate_asset_pack` — Generate a coherent full asset set (player/enemies/projectiles/UI/backgrounds) in one call
 - `godot_parse_scene` — Parse .tscn file structure
 - `godot_scan_project_files` — List all project files
 - `godot_read_project_setting` — Read project.godot values
@@ -217,9 +218,10 @@ assets/
 Before writing ANY entity script:
 1. Check if `res://assets/sprites/` has a matching image (use `Glob` or `godot_scan_project_files`)
 2. If yes: use `Sprite2D` with `load("res://assets/sprites/entity_name.png")`
-3. If no: call `godot_generate_asset()` to create an SVG, OR use layered `_draw()` procedural visuals
-4. **NEVER use bare `draw_circle()` or `draw_rect()` as the primary visual**
-5. **NEVER leave an entity invisible** — every entity MUST have a visible representation
+3. If no and this is a full game build: call `godot_generate_asset_pack()` once per major system (player/enemies/ui), then use generated sprites
+4. If still missing: call `godot_generate_asset()` for specific entities, OR use layered `_draw()` procedural visuals
+5. **NEVER use bare `draw_circle()` or `draw_rect()` as the primary visual**
+6. **NEVER leave an entity invisible** — every entity MUST have a visible representation
 
 ```gdscript
 # ✅ CORRECT — check for sprite, fall back to procedural
@@ -389,7 +391,7 @@ Step 1: godot-init       → Create project structure
 Step 2: godot-templates   → Apply genre template (defines what files to create)
 Step 3: Write scripts     → player.gd, enemies, game systems (using skills)
 Step 4: Write scenes      → Prefer programmatic (scripts build nodes in _ready())
-Step 5: godot-assets      → Generate placeholder sprites via MCP
+Step 5: godot-assets      → Generate asset PACK via MCP (`godot_generate_asset_pack`) + per-entity assets as needed
 Step 6: Set main scene    → Edit project.godot
 Step 7: godot-ops         → Reload → Run → Check errors → Fix → Repeat
 ```

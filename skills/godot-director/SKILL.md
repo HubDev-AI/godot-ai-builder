@@ -492,10 +492,11 @@ scene.some_signal.connect(_handler)
 6. **Flag entities without assets**: List game entities from the PRD that have no matching asset.
    These will use procedural visuals or `godot_generate_asset`.
 7. **Write the asset map** to the PRD (Section 7 or appendix) so all subsequent phases can reference it.
+8. **If 4+ entities are missing visuals**: call `godot_generate_asset_pack()` immediately using the closest genre preset (`top_down_shooter`, `arena_survivor`, `platformer`, `rpg`, `tower_defense`) and chosen visual style.
 
 ### Asset Usage Rules (ENFORCED in all subsequent phases)
 - **If an asset exists for an entity**: Script MUST use `Sprite2D` + `load("res://assets/sprites/X.png")`
-- **If NO asset exists**: Script MUST call `godot_generate_asset()` OR use layered `_draw()` procedural visuals
+- **If NO asset exists**: call `godot_generate_asset_pack()` first for batch coverage, then `godot_generate_asset()` for any remaining entities, OR use layered `_draw()` procedural visuals
 - **NEVER use bare `draw_circle()` or `draw_rect()` as the primary visual for ANY entity**
 - **NEVER leave an entity invisible** (no visual = broken game)
 
@@ -512,7 +513,7 @@ scene.some_signal.connect(_handler)
 4. Create minimal main scene (root node + script)
 5. Write player script (movement only, no abilities yet)
    - **If player asset exists**: Use `Sprite2D` + `load("res://assets/sprites/player.png")`
-   - **If no player asset**: Generate one with `godot_generate_asset` or use layered `_draw()`
+   - **If no player asset**: Try `godot_generate_asset_pack` for the current genre first, then generate one with `godot_generate_asset` if still missing, or use layered `_draw()`
 6. Build player node programmatically in main.gd `_ready()`
 7. Add background (gradient shader or colored rect that uses `get_viewport_rect()`, NOT hardcoded size)
 8. Add camera
@@ -614,12 +615,13 @@ scene.some_signal.connect(_handler)
 Load the `godot-polish` skill for this phase.
 
 ### Step A: Generate Assets (MANDATORY)
-Call `godot_generate_asset` for EVERY game entity that doesn't have a proper visual:
-- Player sprite (`godot_generate_asset({name: "player", type: "character", ...})`)
-- Each enemy type (`godot_generate_asset({name: "enemy_chaser", type: "enemy", ...})`)
-- Projectiles (`godot_generate_asset({name: "bullet", type: "projectile", ...})`)
-- Pickups/items (`godot_generate_asset({name: "health_pickup", type: "item", ...})`)
-- UI icons (`godot_generate_asset({name: "heart_icon", type: "icon", ...})`)
+1. Call `godot_generate_asset_pack` first (genre preset + chosen style) to bootstrap a coherent visual set in one shot.
+2. Then call `godot_generate_asset` for any missing or special-case entities:
+   - Player sprite (`godot_generate_asset({name: "player", type: "character", ...})`)
+   - Each enemy type (`godot_generate_asset({name: "enemy_chaser", type: "enemy", ...})`)
+   - Projectiles (`godot_generate_asset({name: "bullet", type: "projectile", ...})`)
+   - Pickups/items (`godot_generate_asset({name: "health_pickup", type: "item", ...})`)
+   - UI icons (`godot_generate_asset({name: "heart_icon", type: "icon", ...})`)
 
 **If you skip this step, the game will look terrible. Do NOT skip it.**
 
@@ -767,7 +769,7 @@ Without `godot_log`, the Godot dock shows NOTHING while agents work. This makes 
 **⛔ HARD RULES — NEVER VIOLATE THESE:**
 - **NEVER declare the build "complete" or "done" if `godot_get_errors` returns ANY errors.** Fix them ALL first.
 - **NEVER skip Phase 5 (Polish).** If the game has plain shapes and no effects, Phase 5 has not passed.
-- **NEVER skip asset generation.** Call `godot_generate_asset` for every entity.
+- **NEVER skip asset generation.** Start with `godot_generate_asset_pack`, then fill gaps with `godot_generate_asset`.
 - **NEVER move to the next phase if the current phase has unfixed errors.**
 
 When executing, ALWAYS:

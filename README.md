@@ -83,7 +83,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot-ops` | MCP tool operations: run, stop, errors, reload |
 | `godot-templates` | Genre-specific templates with file manifests |
 
-### MCP Tools (20 tools via godot-bridge)
+### MCP Tools (21 tools via godot-bridge)
 
 | Tool | Purpose |
 |------|---------|
@@ -92,7 +92,8 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_stop_scene` | Stop the running game |
 | `godot_get_errors` | Read editor error log |
 | `godot_reload_filesystem` | Tell Godot to rescan files |
-| `godot_generate_asset` | Generate SVG/PNG placeholder sprites |
+| `godot_generate_asset` | Generate polished SVG/PNG sprites for entities |
+| `godot_generate_asset_pack` | Generate a full coherent asset set for a game genre |
 | `godot_parse_scene` | Parse .tscn file structure |
 | `godot_scan_project_files` | List all project files |
 | `godot_read_project_setting` | Read project.godot values |
@@ -208,7 +209,7 @@ godot-ai-builder/
 ├── mcp-server/                # Node.js MCP bridge
 │   ├── index.js
 │   └── src/
-│       ├── tools.js           # 20 MCP tool definitions
+│       ├── tools.js           # 21 MCP tool definitions
 │       ├── godot-bridge.js    # HTTP client -> Godot
 │       ├── scene-parser.js    # .tscn parser
 │       └── asset-generator.js # SVG/PNG generator
