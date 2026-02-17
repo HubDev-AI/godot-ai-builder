@@ -354,6 +354,13 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 3. **Every MCP tool response includes `_error_count`.** You always know how many errors exist.
    If `_error_count > 0`, stop what you're doing and fix errors first.
 
+4. **Phase 5/6 completion requires objective quality gates.** `godot_update_phase(..., "completed")`
+   now runs `godot_evaluate_quality_gates` internally and rejects completion when gates fail.
+   Use failed gates + hints to iterate until pass.
+
+5. **Quality reports are persisted automatically** to `res://.claude/quality_reports/` on every
+   explicit quality evaluation and every Phase 5/6 completion attempt.
+
 ### MANDATORY EXECUTION PATTERN (every phase, no exceptions):
 
 ```
@@ -364,9 +371,11 @@ List ALL asset prompts in the PRD. The user generates them externally and drops 
 5. godot_reload_filesystem()  ← response includes _error_count
 6. If _error_count > 0: fix them NOW
 7. Repeat for each subsequent script
+8. For Phase 5/6: run godot_evaluate_quality_gates(N), fix failures, re-run until pass
 
 ⛔ NEVER write more than 2 scripts without running godot_reload_filesystem()
 ⛔ NEVER ignore _error_count or _action_required in tool responses
+⛔ For Phase 5/6, NEVER attempt completion without checking failed_quality_gates first
 ⛔ If you write 3+ scripts without testing, you WILL get cascading errors
 ⛔ Cascading errors are 10x harder to fix than individual errors
 ```
@@ -807,15 +816,22 @@ When executing, ALWAYS:
    ```
 5. **Use MCP tools** — call `godot_reload_filesystem` → `godot_run_scene` → `godot_get_errors` after EACH phase. NEVER use raw curl.
 6. Fix all errors before moving to next phase
-7. At each phase END (after quality gate passes):
+7. For Phase 5/6, run the quality loop before completion:
+   ```
+   eval = godot_evaluate_quality_gates(N, "Phase Name")
+   if eval.failed_quality_gates.length > 0:
+     fix weakest gates first using eval.gate_details[*].hint
+     repeat until eval.gates_passed == true
+   ```
+8. At each phase END (after quality gate passes):
    ```
    godot_update_phase(N, "Phase Name", "completed", {gate1: true, gate2: true, ...})
    godot_save_build_state({...updated state with completed_phases, files_written, etc...})
    ```
-8. Report progress: "Phase X complete. Y/Z quality gates passed."
-9. If a quality gate fails, fix it before proceeding
-10. After Phase 6, report: "Game complete. Here's what was built: [summary]"
-11. **Clean up**: Remove both checkpoint and build lock:
+9. Report progress: "Phase X complete. Y/Z quality gates passed."
+10. If a quality gate fails, fix it before proceeding
+11. After Phase 6, report: "Game complete. Here's what was built: [summary]"
+12. **Clean up**: Remove both checkpoint and build lock:
    ```bash
    rm .claude/.build_in_progress
    rm .claude/build_state.json
