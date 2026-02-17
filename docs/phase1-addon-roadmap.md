@@ -1,5 +1,7 @@
 # Phase 1 Add-on Roadmap
 
+See also: `docs/poc-mvp-addon-quality-plan.md` for the PoC-first execution sequence before full Phase 1 breadth.
+
 ## Purpose
 
 This document defines a concrete Phase 1 plan to extend Godot AI Builder with reliable add-on integration.
