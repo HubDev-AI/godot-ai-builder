@@ -638,6 +638,13 @@ scene.some_signal.connect(_handler)
 
 Load the `godot-polish` skill for this phase.
 
+### Step 0: Apply Polish Integration Pack (MANDATORY)
+1. Call `godot_apply_integration_pack("pack_polish", true)` before polish implementation work.
+2. If the tool returns `rejected: true`:
+   - stop Phase 5 completion attempts
+   - follow remediation in the tool response
+   - rerun the pack until it passes
+
 ### Step A: Generate Assets (MANDATORY)
 1. Call `godot_generate_asset_pack` first (genre preset + chosen style) to bootstrap a coherent visual set in one shot.
 2. Then call `godot_generate_asset` for any missing or special-case entities:

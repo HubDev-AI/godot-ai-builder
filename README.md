@@ -16,7 +16,7 @@ directly to disk               |
 Godot auto-reloads      Run / Stop / Get Errors
 ```
 
-Claude Code is the brain. The plugin gives it 14 specialized game development skills, 20 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
+Claude Code is the brain. The plugin gives it 14 specialized game development skills, 27 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
 
 ## Install
 
@@ -83,7 +83,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot-ops` | MCP tool operations: run, stop, errors, reload |
 | `godot-templates` | Genre-specific templates with file manifests |
 
-### MCP Tools (21 tools via godot-bridge)
+### MCP Tools (27 tools via godot-bridge)
 
 | Tool | Purpose |
 |------|---------|
@@ -97,6 +97,10 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_parse_scene` | Parse .tscn file structure |
 | `godot_scan_project_files` | List all project files |
 | `godot_read_project_setting` | Read project.godot values |
+| `godot_list_addons` | List curated add-ons from the internal compatibility catalog |
+| `godot_install_addon` | Install curated add-ons into the current project |
+| `godot_verify_addon` | Verify add-on files and integration health checks |
+| `godot_apply_integration_pack` | Apply a curated integration pack (PoC: `pack_polish`) with strict failure mode |
 | `godot_log` | Send progress messages to the Godot dock panel |
 | `godot_save_build_state` | Save build checkpoint (phase progress, files, quality gates) |
 | `godot_get_build_state` | Load build checkpoint (detect interrupted builds) |
@@ -213,7 +217,7 @@ godot-ai-builder/
 ├── mcp-server/                # Node.js MCP bridge
 │   ├── index.js
 │   └── src/
-│       ├── tools.js           # 21 MCP tool definitions
+│       ├── tools.js           # 27 MCP tool definitions
 │       ├── godot-bridge.js    # HTTP client -> Godot
 │       ├── scene-parser.js    # .tscn parser
 │       └── asset-generator.js # SVG/PNG generator

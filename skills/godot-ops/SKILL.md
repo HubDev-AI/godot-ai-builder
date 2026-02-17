@@ -107,6 +107,35 @@ Read from project.godot:
 {"key": "application/run/main_scene"}
 ```
 
+### godot_list_addons
+List curated add-ons from the internal catalog:
+```json
+{}
+```
+Optional filter:
+```json
+{"category": "polish_camera"}
+```
+
+### godot_install_addon
+Install a catalog add-on (PoC baseline: Phantom Camera):
+```json
+{"addon_id": "phantom_camera"}
+```
+
+### godot_verify_addon
+Verify required add-on files/signals:
+```json
+{"addon_id": "phantom_camera"}
+```
+
+### godot_apply_integration_pack
+Apply curated pack with strict fail-loud behavior:
+```json
+{"pack_id": "pack_polish", "strict": true}
+```
+If this returns `rejected: true`, treat it as a hard blocker and fix integration before phase completion.
+
 ### godot_log (⚠️ MANDATORY — call constantly)
 Send a message to the Godot dock panel. This is the user's ONLY way to see your progress in the Godot editor. You MUST call this tool constantly — before and after every file write, every test, every error fix, every decision, every phase transition. Aim for 3-5 calls per file write minimum.
 ```json
