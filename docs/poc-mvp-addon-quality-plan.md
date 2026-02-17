@@ -127,6 +127,7 @@ Target outcome for "very good game" status:
 2. PoC PR B: ship `pack_polish` installer/verifier slice with hard failure behavior.
    - Artifacts: `mcp-server/addons/catalog.json`, `mcp-server/src/tools.js` (`godot_list_addons`, `godot_install_addon`, `godot_verify_addon`, `godot_apply_integration_pack`)
 3. PoC PR C: wire rubric scoring + iteration policy (max 3 loops, then escalate).
+   - Artifacts: `mcp-server/src/tools.js` (`godot_score_poc_quality`) + Director quality-loop policy updates
 4. PoC Validation: run 3 benchmark builds, compare reports, publish Go/No-Go decision.
 
 ## Decision Rules

@@ -20,6 +20,34 @@ const ADDON_CATALOG_PATH = new URL("../addons/catalog.json", import.meta.url);
 const execFileAsync = promisify(execFile);
 let addonCatalogCache = null;
 
+const POC_SCORE_WEIGHTS = {
+  core_loop_fun: 20,
+  controls_game_feel: 20,
+  progression_variety: 20,
+  encounter_depth: 15,
+  visual_polish_cohesion: 15,
+  ux_onboarding_feedback: 10,
+};
+
+const POC_REQUIRED_HARD_GATES = [
+  "zero_script_errors",
+  "no_critical_warnings",
+  "play_loop_complete",
+  "controls_clear",
+  "no_soft_lock",
+  "quality_gates_passed",
+];
+
+const POC_REQUIRED_VISUAL_CHECKS = [
+  "named_art_direction",
+  "palette_discipline",
+  "silhouette_readability",
+  "layering_depth",
+  "feedback_clarity",
+  "ui_theme_consistency",
+  "no_raw_placeholder_feel",
+];
+
 // ---------------------------------------------------------------------------
 // Tool definitions (MCP schema)
 // ---------------------------------------------------------------------------
@@ -328,6 +356,59 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "godot_score_poc_quality",
+    description:
+      "Score a PoC run using the weighted anti-tutorial rubric and enforce the max-iteration policy. Returns go/needs_iteration/no_go with targeted next_actions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        benchmark_id: {
+          type: "string",
+          description: "Optional benchmark ID (e.g. poc_prompt_01)",
+        },
+        run_id: {
+          type: "string",
+          description: "Optional stable run identifier",
+        },
+        iteration_count: {
+          type: "number",
+          description: "Current quality iteration number (1..N)",
+        },
+        max_iterations: {
+          type: "number",
+          description: "Maximum allowed quality iterations (default: 3)",
+        },
+        hard_gates: {
+          type: "object",
+          description: "Hard gate boolean map from the evaluator checklist",
+        },
+        anti_tutorial_visual_checks: {
+          type: "object",
+          description: "Anti-tutorial visual boolean map from the evaluator checklist",
+        },
+        scores: {
+          type: "object",
+          description: "Category scores (1-5) using the PoC rubric keys",
+        },
+        signature_moments: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional list of notable signature gameplay moments",
+        },
+        notes: {
+          type: "string",
+          description: "Optional evaluator notes",
+        },
+      },
+      required: [
+        "iteration_count",
+        "hard_gates",
+        "anti_tutorial_visual_checks",
+        "scores"
+      ],
+    },
+  },
+  {
     name: "godot_log",
     description:
       "⚠️ MANDATORY — Send a progress message to the Godot editor dock panel. You MUST call this tool constantly throughout the entire build process. The dock panel is the user's PRIMARY way to monitor what you are doing — if you don't call this, the user sees NOTHING happening and thinks the build is stuck.\n\nYou MUST call godot_log:\n- BEFORE writing every file (what you're about to write and why)\n- AFTER writing every file (confirm it's done, line count)\n- When starting each build phase\n- When finishing each build phase (with quality gate results)\n- When encountering errors (what the error is)\n- When fixing errors (what the fix was)\n- Before and after running scenes\n- Before and after checking errors\n- When making any decision (what you chose and why)\n\nAim for 3-5 godot_log calls per file write. Call it between every 2-3 other tool calls at minimum. MORE IS BETTER — the user wants constant visibility.",
@@ -599,6 +680,8 @@ export async function handleToolCall(name, args) {
       return await toolVerifyAddon(args.addon_id);
     case "godot_apply_integration_pack":
       return await toolApplyIntegrationPack(args.pack_id, args.strict !== false);
+    case "godot_score_poc_quality":
+      return await toolScorePocQuality(args);
     case "godot_log":
       return await toolLog(args.message);
     case "godot_save_build_state":
@@ -1053,6 +1136,129 @@ async function toolApplyIntegrationPack(packId, strict = true) {
     report_path: reportPath,
     results,
   };
+}
+
+async function toolScorePocQuality(args = {}) {
+  const iterationCount = Number.isFinite(Number(args.iteration_count))
+    ? Math.max(1, Number(args.iteration_count))
+    : 1;
+  const maxIterations = Number.isFinite(Number(args.max_iterations))
+    ? Math.max(1, Number(args.max_iterations))
+    : 3;
+  const benchmarkId = args.benchmark_id || "poc_prompt_unknown";
+  const runId = args.run_id || `${benchmarkId}-${Date.now()}`;
+  const signatureMoments = Array.isArray(args.signature_moments)
+    ? args.signature_moments.filter((item) => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+  const hardGates = normalizeChecklistBooleans(
+    args.hard_gates || {},
+    POC_REQUIRED_HARD_GATES
+  );
+  const antiTutorialChecks = normalizeChecklistBooleans(
+    args.anti_tutorial_visual_checks || {},
+    POC_REQUIRED_VISUAL_CHECKS
+  );
+  const scoreInfo = normalizePocScores(args.scores || {});
+
+  if (!scoreInfo.ok) {
+    await bridge.sendLog(`[MCP] PoC scoring rejected: ${scoreInfo.reason}`);
+    return {
+      ok: false,
+      rejected: true,
+      reason: scoreInfo.reason,
+    };
+  }
+
+  const weightedTotal = calculateWeightedPocScore(scoreInfo.scores);
+  const hardFailures = checklistFailures(hardGates);
+  const visualFailures = checklistFailures(antiTutorialChecks);
+  const hardGatesPassed = hardFailures.length === 0;
+  const antiTutorialPassed = visualFailures.length === 0;
+  const scoreValues = Object.values(scoreInfo.scores);
+  const categoryMinPass = scoreValues.every((value) => value >= 3);
+  const twoCategoriesAtLeastFour =
+    scoreValues.filter((value) => value >= 4).length >= 2;
+
+  const gatesPassed =
+    hardGatesPassed &&
+    antiTutorialPassed &&
+    weightedTotal >= 80 &&
+    categoryMinPass &&
+    twoCategoriesAtLeastFour &&
+    scoreInfo.scores.visual_polish_cohesion >= 4;
+
+  const veryGoodStatus =
+    gatesPassed &&
+    weightedTotal >= 85 &&
+    scoreInfo.scores.controls_game_feel >= 4 &&
+    scoreInfo.scores.progression_variety >= 4 &&
+    scoreInfo.scores.visual_polish_cohesion >= 4 &&
+    signatureMoments.length >= 2;
+
+  const escalationRequired = !gatesPassed && iterationCount >= maxIterations;
+  const verdict = gatesPassed
+    ? "go"
+    : escalationRequired
+      ? "no_go"
+      : "needs_iteration";
+
+  const nextActions = derivePocNextActions({
+    hardFailures,
+    visualFailures,
+    scores: scoreInfo.scores,
+    escalationRequired,
+    maxActions: 8,
+  });
+
+  const report = {
+    ok: gatesPassed,
+    phase_number: 6,
+    phase_name: "Final QA (PoC Rubric)",
+    schema_version: "poc-quality-report-v1",
+    benchmark_id: benchmarkId,
+    run_id: runId,
+    timestamp_utc: new Date().toISOString(),
+    max_iterations: maxIterations,
+    iteration_count: iterationCount,
+    objective_quality: {
+      gates_passed: hardGatesPassed,
+      failed_quality_gates: hardFailures,
+      quality_report_paths: [],
+    },
+    hard_gates: hardGates,
+    anti_tutorial_visual_checks: antiTutorialChecks,
+    hard_gate_failures: hardFailures,
+    anti_tutorial_failures: visualFailures,
+    scores: scoreInfo.scores,
+    weighted_total_score: weightedTotal,
+    category_min_pass: categoryMinPass,
+    two_categories_at_least_four: twoCategoriesAtLeastFour,
+    signature_moments: signatureMoments,
+    very_good_status: veryGoodStatus,
+    verdict,
+    escalation_required: escalationRequired,
+    gates_passed: gatesPassed,
+    next_actions: nextActions,
+    notes: typeof args.notes === "string" ? args.notes : "",
+  };
+
+  const qualityReportPath = await persistQualityReport(report, "poc_rubric_score", {
+    benchmark_id: benchmarkId,
+    run_id: runId,
+    iteration_count: iterationCount,
+    max_iterations: maxIterations,
+  });
+  if (qualityReportPath) {
+    report.quality_report_path = qualityReportPath;
+    report.objective_quality.quality_report_paths.push(qualityReportPath);
+    await bridge.sendLog(`[MCP] PoC quality report saved: ${qualityReportPath}`);
+  }
+
+  await bridge.sendLog(
+    `[MCP] PoC quality verdict=${verdict} score=${weightedTotal} iteration=${iterationCount}/${maxIterations}`
+  );
+  return report;
 }
 
 async function toolLog(message) {
@@ -1548,6 +1754,92 @@ function resolveProjectPath(pathLike) {
     throw new Error(`Path escapes project root: ${pathLike}`);
   }
   return abs;
+}
+
+function normalizeChecklistBooleans(source, requiredKeys) {
+  const normalized = {};
+  for (const key of requiredKeys) {
+    normalized[key] = Boolean(source[key]);
+  }
+  return normalized;
+}
+
+function checklistFailures(checklist) {
+  return Object.entries(checklist)
+    .filter(([, passed]) => !passed)
+    .map(([name]) => name);
+}
+
+function normalizePocScores(source) {
+  const normalized = {};
+  for (const [key] of Object.entries(POC_SCORE_WEIGHTS)) {
+    const raw = source[key];
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      return { ok: false, reason: `Missing numeric score for '${key}'` };
+    }
+    if (value < 1 || value > 5) {
+      return { ok: false, reason: `Score '${key}' must be between 1 and 5` };
+    }
+    normalized[key] = value;
+  }
+  return { ok: true, scores: normalized };
+}
+
+function calculateWeightedPocScore(scores) {
+  const total = Object.entries(POC_SCORE_WEIGHTS).reduce(
+    (sum, [key, weight]) => sum + (Number(scores[key]) / 5) * weight,
+    0
+  );
+  return Number(total.toFixed(1));
+}
+
+function derivePocNextActions({
+  hardFailures,
+  visualFailures,
+  scores,
+  escalationRequired,
+  maxActions = 8,
+}) {
+  const actions = [];
+  const hardHints = {
+    zero_script_errors: "Fix all remaining script errors before attempting completion.",
+    no_critical_warnings: "Resolve critical warnings that impact runtime correctness.",
+    play_loop_complete: "Wire complete flow: menu -> gameplay -> win/lose -> restart/menu.",
+    controls_clear: "Improve control responsiveness and add in-game control guidance.",
+    no_soft_lock: "Remove dead-end states and verify at least 10 minutes of continuous play.",
+    quality_gates_passed: "Re-run objective quality gates and fix every failed gate hint.",
+  };
+  const visualHints = {
+    named_art_direction: "Define and apply one explicit art direction pillar across scenes and UI.",
+    palette_discipline: "Constrain palette and use accent colors intentionally.",
+    silhouette_readability: "Improve player/enemy/hazard silhouettes for fast gameplay readability.",
+    layering_depth: "Add stronger background/midground/foreground layering and depth cues.",
+    feedback_clarity: "Add distinct visual feedback for hit/death/pickup/ability events.",
+    ui_theme_consistency: "Style HUD/menu to match gameplay art direction.",
+    no_raw_placeholder_feel: "Replace or stylize placeholder visuals and default-looking UI elements.",
+  };
+
+  for (const failure of hardFailures) {
+    actions.push(hardHints[failure] || `Fix hard gate: ${failure}`);
+  }
+
+  for (const failure of visualFailures) {
+    actions.push(visualHints[failure] || `Fix visual gate: ${failure}`);
+  }
+
+  const weakestCategories = Object.entries(scores)
+    .sort((a, b) => a[1] - b[1])
+    .slice(0, 2);
+  for (const [category] of weakestCategories) {
+    actions.push(`Improve rubric category: ${category}`);
+  }
+
+  if (escalationRequired) {
+    actions.push("Max quality iterations reached. Escalate for user direction before further loops.");
+  }
+
+  return Array.from(new Set(actions)).slice(0, maxActions);
 }
 
 async function evaluatePhaseQualityGates(

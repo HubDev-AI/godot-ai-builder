@@ -823,14 +823,19 @@ When executing, ALWAYS:
    ```
 5. **Use MCP tools** — call `godot_reload_filesystem` → `godot_run_scene` → `godot_get_errors` after EACH phase. NEVER use raw curl.
 6. Fix all errors before moving to next phase
-7. For Phase 5/6, run the quality loop before completion:
+7. For Phase 5/6, run the quality loop before completion (max 3 iterations):
    ```
-   eval = godot_evaluate_quality_gates(N, "Phase Name")
-   if eval.failed_quality_gates.length > 0:
-     fix weakest gates first using eval.gate_details[*].hint
-     repeat until eval.gates_passed == true
+   for iteration in 1..3:
+     eval = godot_evaluate_quality_gates(N, "Phase Name")
+     score = godot_score_poc_quality({...checklist booleans + rubric scores..., iteration_count: iteration, max_iterations: 3})
+     if eval.gates_passed and score.verdict == "go":
+       break
+     if score.verdict == "no_go":
+       stop and escalate to user with score.next_actions
+     fix weakest gates first using eval.gate_details[*].hint and score.next_actions
    ```
    If failures repeat across attempts, call `godot_get_latest_quality_report(N, 3)` and compare recurring failed gates before choosing the next fix.
+   Never exceed 3 iterations without user escalation.
 8. At each phase END (after quality gate passes):
    ```
    godot_update_phase(N, "Phase Name", "completed", {gate1: true, gate2: true, ...})
