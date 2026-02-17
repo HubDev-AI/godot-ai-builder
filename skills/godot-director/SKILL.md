@@ -806,48 +806,63 @@ When executing, ALWAYS:
    rm .claude/build_state.json
    ```
 
-## PROGRESS REPORTING (MANDATORY — TERMINAL + GODOT DOCK)
+## ⛔ MANDATORY DOCK LOGGING PROTOCOL (NEVER SKIP) ⛔
 
-You MUST report progress in TWO places after EVERY action:
-1. **Terminal**: Print text so the user sees it in Claude Code
-2. **Godot dock**: Call `godot_log` so the user sees activity in the Godot editor panel
+**The Godot dock panel is the user's PRIMARY progress monitor. If you do not call `godot_log` and `godot_update_phase` constantly, the user sees NOTHING happening and will think the build is broken or stuck.**
 
-**Per file**: Report each file as you write it — call `godot_log` BEFORE and AFTER:
+**This is NOT optional. This is a HARD REQUIREMENT on par with fixing errors.**
+
+### Rule 1: Call `godot_update_phase` at EVERY phase boundary
+```
+godot_update_phase(N, "Phase Name", "in_progress")   ← when phase STARTS
+godot_update_phase(N, "Phase Name", "completed", {gates})  ← when phase ENDS
+```
+**If you skip this, the phase progress bar stays stuck at the last value. The user WILL notice.**
+
+### Rule 2: Call `godot_log` before and after EVERY file write (MINIMUM)
 ```
 godot_log("Writing scripts/player.gd — WASD movement, mouse aim, shooting (layer 1, mask 4)...")
 [...write the file...]
 godot_log("✓ scripts/player.gd written — 85 lines")
+```
+**3-5 godot_log calls per file write minimum. MORE IS ALWAYS BETTER.**
 
-godot_log("Writing scripts/enemy.gd — Chase AI at 90px/s, 30 HP, death particles...")
-[...write the file...]
-godot_log("✓ scripts/enemy.gd written — 120 lines")
+### Rule 3: Call `godot_log` for EVERY decision, error, fix, and test
 ```
-
-**Per phase**: Report completion with gate results:
-```
-godot_log("=== Phase 1: Foundation — Starting ===")
-[...build phase...]
-godot_log("=== Phase 1: Foundation — Complete ===")
-godot_log("Quality gates: 5/5 passed")
-godot_log("Moving to Phase 2: Player Abilities")
-```
-
-**Per error fix**: Report the error and the fix:
-```
+godot_log("Deciding: CharacterBody2D for player (needs physics-based movement)")
 godot_log("ERROR: 'GameManager' not declared in scripts/main.gd:15")
 godot_log("FIX: Adding GameManager to [autoload] in project.godot...")
 godot_log("✓ Error fixed. Retesting...")
-```
-
-**Per test cycle**: Report the build-test-fix loop:
-```
 godot_log("Reloading filesystem...")
-godot_log("Running game...")
-godot_log("Checking errors... 0 errors found")
-godot_log("Game running successfully!")
+godot_log("Checking errors... 0 errors found ✓")
+godot_log("Running game to verify Phase 1...")
+godot_log("Game running. Player moves correctly. Camera follows. Background fills viewport.")
 ```
 
-Call `godot_log` as much as possible. **3-5 calls per file write minimum.** The user wants constant visibility.
+### Rule 4: Call `godot_log` between EVERY 2-3 other tool calls
+If you call `godot_get_errors`, then `godot_reload_filesystem`, then write a file — there should be `godot_log` calls between each of those explaining what you're doing and why.
+
+### Rule 5: Per phase — announce start, progress, and completion
+```
+godot_log("=== Phase 1: Foundation — Starting ===")
+godot_log("Plan: Create main scene, player script, camera, background")
+[...build...]
+godot_log("=== Phase 1: Foundation — Complete ===")
+godot_log("Quality gates: 5/5 passed ✓")
+godot_log("Moving to Phase 2: Player Abilities")
+```
+
+### Rule 6: Sub-agents MUST log with prefix
+```
+godot_log("[Agent: enemies] Writing enemy_chase.gd — chase AI at 90px/s...")
+godot_log("[Agent: enemies] ✓ enemy_chase.gd written — 65 lines")
+```
+
+**⛔ VIOLATION CHECK: If you write a file without calling `godot_log` before AND after, you are violating this protocol. If you transition between phases without calling `godot_update_phase`, you are violating this protocol.**
+
+You MUST report progress in TWO places after EVERY action:
+1. **Terminal**: Print text so the user sees it in Claude Code
+2. **Godot dock**: Call `godot_log` so the user sees activity in the Godot editor panel
 
 **IMPORTANT**: The Stop hook will prevent Claude from finishing while `.claude/.build_in_progress` exists. If the user explicitly asks to cancel, remove the file before stopping.
 

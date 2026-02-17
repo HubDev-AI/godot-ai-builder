@@ -17,7 +17,9 @@ Use `godot_reload_filesystem`, `godot_run_scene`, `godot_get_errors`, etc.
 If MCP tools aren't available, stop and tell the user:
 > "MCP tools not available. Start Claude Code with: `claude --plugin-dir /path/to/godot-ai-builder`"
 
-## RULE: Always Report Progress (Terminal + Godot Dock)
+## ⛔ RULE: MANDATORY Dock Logging (NEVER SKIP)
+
+**The Godot dock panel is the user's PRIMARY progress monitor.** You MUST call `godot_log` before and after EVERY action — no exceptions. If you don't log, the user sees nothing happening and thinks the build is broken.
 
 After EVERY action, report in TWO places:
 1. **Terminal**: Print text for the user
@@ -27,10 +29,16 @@ After EVERY action, report in TWO places:
 godot_log("Reloading Godot filesystem...")
 godot_log("Running game... checking for errors...")
 godot_log("Found 2 errors. Fixing scripts/player.gd line 34...")
+godot_log("✓ Error fixed. Retesting...")
 godot_log("Game running. 0 errors. Phase 1 complete.")
 ```
 
-NEVER write files silently. Call `godot_log` BEFORE and AFTER every action. The more calls the better — the user wants to see constant activity in the Godot dock panel.
+**Rules:**
+- Call `godot_log` BEFORE and AFTER every file write, every test, every error fix
+- Call `godot_log` between every 2-3 other tool calls
+- Call `godot_update_phase` at every phase start (in_progress) and end (completed)
+- Aim for 3-5 `godot_log` calls per file write minimum
+- MORE IS ALWAYS BETTER — the user wants constant activity in the dock
 
 ## The Core Loop
 
@@ -99,12 +107,16 @@ Read from project.godot:
 {"key": "application/run/main_scene"}
 ```
 
-### godot_log
-Send a message to the Godot dock panel. Call this CONSTANTLY for user visibility:
+### godot_log (⚠️ MANDATORY — call constantly)
+Send a message to the Godot dock panel. This is the user's ONLY way to see your progress in the Godot editor. You MUST call this tool constantly — before and after every file write, every test, every error fix, every decision, every phase transition. Aim for 3-5 calls per file write minimum.
 ```json
-{"message": "Writing scripts/player.gd — WASD movement..."}
+{"message": "Writing scripts/player.gd — WASD movement, mouse aim, shooting..."}
+{"message": "✓ scripts/player.gd written — 85 lines"}
+{"message": "ERROR in main.gd:15 — GameManager not found"}
+{"message": "FIX: Registering GameManager autoload..."}
+{"message": "✓ Error fixed. 0 errors remaining."}
 ```
-Call BEFORE and AFTER every file write, every test, every error fix. Sub-agents should prefix with their name: `"[Agent: enemies] Writing enemy.gd..."`
+Sub-agents should prefix with their name: `"[Agent: enemies] Writing enemy.gd..."`
 
 ## Error Resolution Patterns
 
