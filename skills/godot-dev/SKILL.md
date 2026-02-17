@@ -68,7 +68,7 @@ godot-ai-builder/
 │   ├── index.js                 # MCP server entry — Server + StdioServerTransport
 │   ├── package.json             # Dependencies: @modelcontextprotocol/sdk, sharp
 │   └── src/
-│       ├── tools.js             # TOOL_DEFINITIONS array (20 tools) + handleToolCall dispatcher + handlers
+│       ├── tools.js             # TOOL_DEFINITIONS array (21 tools) + handleToolCall dispatcher + handlers
 │       ├── godot-bridge.js      # HTTP client → Godot editor (port 6100)
 │       ├── scene-parser.js      # .tscn text format parser
 │       └── asset-generator.js   # SVG/PNG sprite generator (layered gradients, shadows, glow)

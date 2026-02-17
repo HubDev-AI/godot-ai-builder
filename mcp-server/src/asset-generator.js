@@ -1,11 +1,11 @@
 /**
- * Generates polished placeholder game assets (SVG/PNG sprites) for prototyping.
+ * Generates polished placeholder game assets (SVG/PNG sprites) for game builds.
  * Uses layered SVG with gradients, shadows, highlights, and outlines —
  * producing visually rich sprites that look intentional, not flat.
  * No external AI API required.
  */
 import { writeFile, mkdir } from "fs/promises";
-import { dirname, resolve } from "path";
+import { resolve } from "path";
 
 const PROJECT_PATH = process.env.GODOT_PROJECT_PATH || ".";
 
@@ -88,6 +88,72 @@ export async function generatePng(opts) {
   }
 }
 
+/**
+ * Generate a coherent pack of assets for a genre/preset in one call.
+ * Useful for quickly bootstrapping visuals for full game builds.
+ */
+export async function generateAssetPack(opts = {}) {
+  const presetKey = String(opts.preset || "top_down_shooter");
+  const format = opts.format === "png" ? "png" : "svg";
+  const style = String(opts.style || "sci-fi");
+  const output_dir = String(opts.output_dir || "res://assets/sprites");
+  const includeBackground = opts.include_background !== false;
+  const includeUi = opts.include_ui !== false;
+  const prefix = opts.prefix ? `${sanitizeName(opts.prefix)}_` : "";
+
+  const manifest = resolvePackManifest(
+    opts.assets,
+    presetKey,
+    includeBackground,
+    includeUi
+  );
+  if (manifest.length === 0) {
+    throw new Error(
+      "Asset pack is empty. Provide assets[] or use a known preset."
+    );
+  }
+
+  const generated = [];
+  for (const entry of manifest) {
+    const safeName = `${prefix}${sanitizeName(entry.name)}`;
+    const width = Number(entry.width || 64);
+    const height = Number(entry.height || 64);
+    const type = String(entry.type || "character");
+    const color = entry.color || styleColor(type, style);
+
+    const params = {
+      name: safeName,
+      width,
+      height,
+      type,
+      color,
+      style,
+      output_dir,
+    };
+
+    const result =
+      format === "png" ? await generatePng(params) : await generatePlaceholder(params);
+    generated.push({
+      name: safeName,
+      type,
+      width,
+      height,
+      color,
+      path: result.path,
+      format: result.format,
+    });
+  }
+
+  return {
+    preset: presetKey,
+    style,
+    requested_format: format,
+    output_dir,
+    total: generated.length,
+    generated,
+  };
+}
+
 const DEFAULT_COLORS = {
   character: "#3399ff",
   enemy: "#ee3333",
@@ -101,6 +167,185 @@ const DEFAULT_COLORS = {
   boss: "#cc22aa",
   pickup: "#44dd55",
 };
+
+const STYLE_PALETTES = {
+  "sci-fi": {
+    character: "#4ab7ff",
+    enemy: "#ff4a5f",
+    boss: "#c24dff",
+    projectile: "#ffd84a",
+    pickup: "#55e099",
+    icon: "#8f9fff",
+    background: "#1a2036",
+    ui: "#6e7fa2",
+    tile: "#5e8b6b",
+    npc: "#4fc4b0",
+    item: "#ffba63",
+  },
+  neon: {
+    character: "#00e5ff",
+    enemy: "#ff2d55",
+    boss: "#b517ff",
+    projectile: "#ffea00",
+    pickup: "#00ffa3",
+    icon: "#7c4dff",
+    background: "#0d1022",
+    ui: "#4353a8",
+    tile: "#2e5666",
+    npc: "#00c7b4",
+    item: "#ffb300",
+  },
+  fantasy: {
+    character: "#6aa7ff",
+    enemy: "#c7553f",
+    boss: "#8b3ecf",
+    projectile: "#f9c74f",
+    pickup: "#6ecb63",
+    icon: "#9b8fe3",
+    background: "#243125",
+    ui: "#7d6c5b",
+    tile: "#7e8a5b",
+    npc: "#59a88d",
+    item: "#d9a65f",
+  },
+  minimal: {
+    character: "#4b7bec",
+    enemy: "#eb3b5a",
+    boss: "#8854d0",
+    projectile: "#f7b731",
+    pickup: "#20bf6b",
+    icon: "#778ca3",
+    background: "#2d3436",
+    ui: "#636e72",
+    tile: "#95a5a6",
+    npc: "#45aaf2",
+    item: "#fd9644",
+  },
+  dark: {
+    character: "#4f8bd9",
+    enemy: "#b33951",
+    boss: "#7d3ac1",
+    projectile: "#e5c453",
+    pickup: "#4bbf8a",
+    icon: "#7b7fa6",
+    background: "#11151f",
+    ui: "#4c5772",
+    tile: "#495867",
+    npc: "#3f98a6",
+    item: "#c7904d",
+  },
+};
+
+const ASSET_PACK_PRESETS = {
+  top_down_shooter: [
+    { name: "player", type: "character", width: 96, height: 96 },
+    { name: "enemy_chaser", type: "enemy", width: 80, height: 80 },
+    { name: "enemy_ranged", type: "enemy", width: 80, height: 80 },
+    { name: "enemy_charger", type: "enemy", width: 86, height: 86 },
+    { name: "enemy_boss", type: "boss", width: 128, height: 128 },
+    { name: "bullet_player", type: "projectile", width: 42, height: 42 },
+    { name: "bullet_enemy", type: "projectile", width: 36, height: 36 },
+    { name: "pickup_health", type: "pickup", width: 56, height: 56 },
+    { name: "pickup_xp", type: "pickup", width: 52, height: 52 },
+    { name: "icon_heart", type: "icon", width: 64, height: 64 },
+    { name: "icon_score", type: "icon", width: 64, height: 64 },
+    { name: "bg_arena", type: "background", width: 1920, height: 1080 },
+    { name: "ui_hud_panel", type: "ui", width: 420, height: 120 },
+  ],
+  arena_survivor: [
+    { name: "player_survivor", type: "character", width: 92, height: 92 },
+    { name: "enemy_swarm", type: "enemy", width: 72, height: 72 },
+    { name: "enemy_brute", type: "enemy", width: 96, height: 96 },
+    { name: "enemy_elite", type: "boss", width: 136, height: 136 },
+    { name: "projectile_orb", type: "projectile", width: 44, height: 44 },
+    { name: "pickup_health", type: "pickup", width: 56, height: 56 },
+    { name: "pickup_xp", type: "pickup", width: 52, height: 52 },
+    { name: "pickup_magnet", type: "pickup", width: 52, height: 52 },
+    { name: "icon_timer", type: "icon", width: 64, height: 64 },
+    { name: "bg_survivor_field", type: "background", width: 1920, height: 1080 },
+    { name: "ui_upgrade_card", type: "ui", width: 320, height: 180 },
+  ],
+  platformer: [
+    { name: "player_runner", type: "character", width: 96, height: 96 },
+    { name: "enemy_patrol", type: "enemy", width: 72, height: 72 },
+    { name: "enemy_flyer", type: "enemy", width: 72, height: 72 },
+    { name: "pickup_coin", type: "item", width: 56, height: 56 },
+    { name: "pickup_key", type: "item", width: 56, height: 56 },
+    { name: "tile_ground", type: "tile", width: 128, height: 128 },
+    { name: "tile_platform", type: "tile", width: 128, height: 128 },
+    { name: "tile_hazard", type: "tile", width: 128, height: 128 },
+    { name: "bg_platform_sky", type: "background", width: 1920, height: 1080 },
+    { name: "icon_life", type: "icon", width: 64, height: 64 },
+  ],
+  rpg: [
+    { name: "player_hero", type: "character", width: 96, height: 96 },
+    { name: "npc_villager", type: "npc", width: 84, height: 84 },
+    { name: "enemy_slime", type: "enemy", width: 72, height: 72 },
+    { name: "enemy_boss", type: "boss", width: 136, height: 136 },
+    { name: "item_potion", type: "item", width: 60, height: 60 },
+    { name: "item_quest", type: "item", width: 60, height: 60 },
+    { name: "tile_grass", type: "tile", width: 128, height: 128 },
+    { name: "tile_stone", type: "tile", width: 128, height: 128 },
+    { name: "icon_inventory", type: "icon", width: 64, height: 64 },
+    { name: "bg_rpg_field", type: "background", width: 1920, height: 1080 },
+  ],
+  tower_defense: [
+    { name: "tower_basic", type: "item", width: 96, height: 96 },
+    { name: "tower_sniper", type: "item", width: 96, height: 96 },
+    { name: "tower_splash", type: "item", width: 96, height: 96 },
+    { name: "enemy_runner", type: "enemy", width: 72, height: 72 },
+    { name: "enemy_tank", type: "enemy", width: 104, height: 104 },
+    { name: "enemy_boss", type: "boss", width: 136, height: 136 },
+    { name: "projectile_tower", type: "projectile", width: 42, height: 42 },
+    { name: "pickup_gold", type: "pickup", width: 56, height: 56 },
+    { name: "tile_path", type: "tile", width: 128, height: 128 },
+    { name: "bg_td_field", type: "background", width: 1920, height: 1080 },
+    { name: "icon_wave", type: "icon", width: 64, height: 64 },
+    { name: "ui_shop_panel", type: "ui", width: 420, height: 240 },
+  ],
+};
+
+function styleColor(type, style) {
+  const palette = STYLE_PALETTES[style] || STYLE_PALETTES["sci-fi"];
+  return palette[type] || DEFAULT_COLORS[type] || "#888888";
+}
+
+function resolvePackManifest(
+  customAssets,
+  presetKey,
+  includeBackground,
+  includeUi
+) {
+  let manifest;
+
+  if (Array.isArray(customAssets) && customAssets.length > 0) {
+    manifest = customAssets.map((asset, i) => ({
+      name: asset?.name || `asset_${i + 1}`,
+      type: asset?.type || "character",
+      width: asset?.width || 64,
+      height: asset?.height || 64,
+      color: asset?.color,
+    }));
+  } else {
+    manifest =
+      ASSET_PACK_PRESETS[presetKey] || ASSET_PACK_PRESETS.top_down_shooter;
+  }
+
+  return manifest.filter((asset) => {
+    if (!includeBackground && asset.type === "background") return false;
+    if (!includeUi && (asset.type === "ui" || asset.type === "icon")) return false;
+    return true;
+  });
+}
+
+function sanitizeName(name) {
+  const cleaned = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return cleaned || "asset";
+}
 
 // ---------------------------------------------------------------------------
 // SVG Helpers
