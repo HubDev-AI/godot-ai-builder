@@ -100,6 +100,7 @@ For full games, Claude also asks about your preferred **visual tier**: procedura
 | `godot_log` | Send progress messages to the Godot dock panel |
 | `godot_save_build_state` | Save build checkpoint (phase progress, files, quality gates) |
 | `godot_get_build_state` | Load build checkpoint (detect interrupted builds) |
+| `godot_evaluate_quality_gates` | Run objective quality checks (especially Phase 5/6) and return failed gates |
 | `godot_update_phase` | Update dock phase progress (number, name, status, gates) |
 
 **Editor Integration** (inspect, verify, manipulate — what Ziva charges $20/month for):
@@ -131,6 +132,7 @@ When you ask for a complete game, the Director runs a 6-phase build:
 7. **Phase 6: QA** — Error checking, edge cases, final verification
 
 Each phase has quality gates. Claude won't proceed until they pass.
+For Phase 5/6, `godot_update_phase(..., "completed")` also runs objective quality checks and rejects completion when required gates fail.
 
 ## Build Resumption
 
