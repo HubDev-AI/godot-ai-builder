@@ -292,6 +292,26 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "godot_get_latest_quality_report",
+    description:
+      "Read the most recent saved quality report(s) from .claude/quality_reports. Useful for comparing repeated gate failures across attempts and planning targeted fixes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        phase_number: {
+          type: "number",
+          description:
+            "Optional phase filter (e.g. 5 or 6). When omitted, returns latest reports across all phases.",
+        },
+        limit: {
+          type: "number",
+          description:
+            "Maximum reports to return (default: 1, max: 10).",
+        },
+      },
+    },
+  },
+  {
     name: "godot_evaluate_quality_gates",
     description:
       "Evaluate objective quality gates for a phase using project files and scene/config signals. For Phase 5+ this checks visual polish proxies (assets, FX, UI styling, layering, feedback cues). For Phase 6 it also checks flow/readiness proxies (main scene, menu/restart/pause flow markers, no pass stubs). Use this before godot_update_phase(..., 'completed') to see what is still missing. Saves a structured report to .claude/quality_reports.",
@@ -501,6 +521,11 @@ export async function handleToolCall(name, args) {
       return await toolSaveBuildState(args.state);
     case "godot_get_build_state":
       return await toolGetBuildState();
+    case "godot_get_latest_quality_report":
+      return await toolGetLatestQualityReport(
+        args.phase_number,
+        args.limit
+      );
     case "godot_evaluate_quality_gates":
       return await toolEvaluateQualityGates(
         args.phase_number,
@@ -753,6 +778,65 @@ async function toolGetBuildState() {
     await bridge.sendLog(`[MCP] Checkpoint file corrupted: ${err.message}`);
     return { found: false, state: null, error: err.message };
   }
+}
+
+async function toolGetLatestQualityReport(phaseNumber, limit) {
+  const maxReports = Number.isFinite(Number(limit))
+    ? Math.max(1, Math.min(10, Number(limit)))
+    : 1;
+  const phaseFilter = Number.isFinite(Number(phaseNumber))
+    ? Number(phaseNumber)
+    : null;
+
+  await bridge.sendLog(
+    `[MCP] Reading quality reports${phaseFilter === null ? "" : ` for Phase ${phaseFilter}`}...`
+  );
+
+  const reportPaths = await listQualityReportPaths();
+  const filtered = reportPaths.filter((reportPath) => {
+    if (phaseFilter === null) return true;
+    return extractPhaseNumberFromReportPath(reportPath) === phaseFilter;
+  });
+
+  if (filtered.length === 0) {
+    await bridge.sendLog("[MCP] No matching quality reports found");
+    return {
+      found: false,
+      total: 0,
+      reports: [],
+      phase_number: phaseFilter,
+    };
+  }
+
+  const selected = filtered.slice(0, maxReports);
+  const reports = [];
+  for (const reportPath of selected) {
+    try {
+      const absPath = reportPathToAbsolute(reportPath);
+      const content = await readFile(absPath, "utf-8");
+      reports.push({
+        path: reportPath,
+        data: JSON.parse(content),
+      });
+    } catch (err) {
+      reports.push({
+        path: reportPath,
+        error: `Failed to read report: ${err.message}`,
+      });
+    }
+  }
+
+  await bridge.sendLog(
+    `[MCP] Loaded ${reports.length} quality report${reports.length === 1 ? "" : "s"}`
+  );
+
+  return {
+    found: true,
+    total: filtered.length,
+    returned: reports.length,
+    phase_number: phaseFilter,
+    reports,
+  };
 }
 
 async function toolEvaluateQualityGates(phaseNumber, phaseName = "", qualityGates = {}) {
@@ -1485,4 +1569,33 @@ async function persistQualityReport(report, trigger, meta = {}) {
   } catch {
     return "";
   }
+}
+
+async function listQualityReportPaths() {
+  let entries;
+  try {
+    entries = await readdir(QUALITY_REPORTS_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const files = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => entry.name)
+    .sort((a, b) => b.localeCompare(a));
+
+  return files.map((name) => `res://.claude/quality_reports/${name}`);
+}
+
+function reportPathToAbsolute(reportPath) {
+  if (reportPath.startsWith("res://")) {
+    return resToAbsolute(reportPath);
+  }
+  return resolve(PROJECT_PATH, reportPath);
+}
+
+function extractPhaseNumberFromReportPath(reportPath) {
+  const match = reportPath.match(/-phase(\d+)-/);
+  if (!match) return null;
+  return Number(match[1]);
 }
