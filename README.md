@@ -169,6 +169,26 @@ No more re-explaining your game after a session crash.
 - **Node.js 20+** (for the MCP server)
 - **Claude Code 1.0.33+** (plugin support required)
 
+## Smoke Test
+
+Use this to verify the Godot HTTP bridge is alive before a build session:
+
+```bash
+node scripts/smoke-test.mjs
+```
+
+Optional deeper checks:
+
+```bash
+node scripts/smoke-test.mjs --full
+```
+
+You can also override host/port if needed:
+
+```bash
+node scripts/smoke-test.mjs --host 127.0.0.1 --port 6100 --timeout 7000
+```
+
 ## Project Structure
 
 ```

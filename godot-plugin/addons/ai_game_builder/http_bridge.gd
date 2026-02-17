@@ -124,8 +124,10 @@ func _handle_request(client: StreamPeerTCP, raw: String):
 	var body = {}
 	if not body_str.is_empty():
 		var json = JSON.new()
-		if json.parse(body_str) == OK:
-			body = json.data
+		if json.parse(body_str) != OK or not (json.data is Dictionary):
+			_send_response(client, 400, {"error": "invalid JSON body"})
+			return
+		body = json.data
 
 	# Route
 	var response = _route(method, path, body)
@@ -187,7 +189,7 @@ func _handle_status() -> Dictionary:
 		"main_scene": summary.get("main_scene", ""),
 		"scripts": summary.get("scripts", []),
 		"scenes": summary.get("scenes", []),
-		"is_playing": EditorInterface.is_playing_scene() if editor_interface else false,
+		"is_playing": editor_interface.is_playing_scene() if editor_interface else false,
 	}
 
 
@@ -221,8 +223,9 @@ func _handle_stop() -> Dictionary:
 
 
 func _handle_reload() -> Dictionary:
-	if editor_interface:
-		editor_interface.get_resource_filesystem().scan()
+	var fs = _get_resource_filesystem()
+	if fs:
+		fs.scan()
 		bridge_log.emit("Filesystem rescanned")
 	return {"ok": true}
 
@@ -301,8 +304,9 @@ func _handle_update_phase(body: Dictionary) -> Dictionary:
 	phase_updated.emit(body)
 	bridge_log.emit("Phase %d: %s — %s" % [body.get("phase_number", 0), body.get("phase_name", ""), body.get("status", "")])
 	# Trigger filesystem scan so Godot picks up files written during this phase
-	if editor_interface:
-		EditorInterface.get_resource_filesystem().scan()
+	var fs = _get_resource_filesystem()
+	if fs:
+		fs.scan()
 	return {"ok": true}
 
 
@@ -311,7 +315,10 @@ func _handle_get_phase() -> Dictionary:
 
 
 func _save_phase_state():
-	DirAccess.make_dir_recursive_absolute("res://.claude")
+	var phase_dir_abs = ProjectSettings.globalize_path("res://.claude")
+	var mkdir_err = DirAccess.make_dir_recursive_absolute(phase_dir_abs)
+	if mkdir_err != OK and mkdir_err != ERR_ALREADY_EXISTS:
+		push_warning("[AI Game Builder] Could not create phase state directory: %s (error %d)" % [phase_dir_abs, mkdir_err])
 	var file = FileAccess.open(PHASE_STATE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(_phase_state))
@@ -336,7 +343,7 @@ func _load_phase_state():
 func _parse_query_string(qs: String) -> Dictionary:
 	var params: Dictionary = {}
 	for pair in qs.split("&"):
-		var kv = pair.split("=")
+		var kv = pair.split("=", false, 1)
 		if kv.size() == 2:
 			params[kv[0].uri_decode()] = kv[1].uri_decode()
 	return params
@@ -346,18 +353,18 @@ func _parse_query_string(qs: String) -> Dictionary:
 
 
 func _handle_get_scene_tree(query: Dictionary) -> Dictionary:
-	var max_depth = int(query.get("max_depth", "10"))
-	var root = EditorInterface.get_edited_scene_root()
+	var max_depth = max(0, int(query.get("max_depth", "10")))
+	var root = _get_edited_scene_root()
 	if root == null:
 		return {"error": "No scene open in the editor"}
-	return _serialize_node_tree(root, max_depth, 0)
+	return _serialize_node_tree(root, root, max_depth, 0)
 
 
-func _serialize_node_tree(node: Node, max_depth: int, current_depth: int) -> Dictionary:
+func _serialize_node_tree(root: Node, node: Node, max_depth: int, current_depth: int) -> Dictionary:
 	var result: Dictionary = {
 		"name": node.name,
 		"type": node.get_class(),
-		"path": str(node.get_path()) if current_depth == 0 else str(EditorInterface.get_edited_scene_root().get_path_to(node)),
+		"path": str(node.get_path()) if current_depth == 0 else str(root.get_path_to(node)),
 	}
 
 	# Include script path if attached
@@ -377,7 +384,7 @@ func _serialize_node_tree(node: Node, max_depth: int, current_depth: int) -> Dic
 	var children_arr: Array = []
 	if current_depth < max_depth:
 		for child in node.get_children():
-			children_arr.append(_serialize_node_tree(child, max_depth, current_depth + 1))
+			children_arr.append(_serialize_node_tree(root, child, max_depth, current_depth + 1))
 	result["children"] = children_arr
 
 	return result
@@ -493,7 +500,7 @@ func _type_name(type_id: int) -> String:
 
 
 func _handle_add_node(body: Dictionary) -> Dictionary:
-	var root = EditorInterface.get_edited_scene_root()
+	var root = _get_edited_scene_root()
 	if root == null:
 		return {"error": "No scene open in the editor"}
 
@@ -530,7 +537,7 @@ func _handle_add_node(body: Dictionary) -> Dictionary:
 
 
 func _handle_update_node(body: Dictionary) -> Dictionary:
-	var root = EditorInterface.get_edited_scene_root()
+	var root = _get_edited_scene_root()
 	if root == null:
 		return {"error": "No scene open in the editor"}
 
@@ -554,7 +561,7 @@ func _handle_update_node(body: Dictionary) -> Dictionary:
 
 
 func _handle_delete_node(body: Dictionary) -> Dictionary:
-	var root = EditorInterface.get_edited_scene_root()
+	var root = _get_edited_scene_root()
 	if root == null:
 		return {"error": "No scene open in the editor"}
 
@@ -590,16 +597,16 @@ func _handle_screenshot(query: Dictionary) -> Dictionary:
 	var viewport_type: String = query.get("viewport", "2d")
 
 	# Try to capture from the editor viewport
-	var vp: SubViewport = null
-	if viewport_type == "3d":
-		vp = EditorInterface.get_editor_viewport_3d(0)
-	else:
-		vp = EditorInterface.get_editor_viewport_2d()
+	var vp = _get_editor_viewport(viewport_type)
 
-	if vp == null:
+	if vp == null or not vp.has_method("get_texture"):
 		return {"error": "Could not access editor viewport"}
 
-	var img: Image = vp.get_texture().get_image()
+	var tex = vp.get_texture()
+	if tex == null or not tex.has_method("get_image"):
+		return {"error": "Could not access viewport texture"}
+
+	var img: Image = tex.get_image()
 	if img == null:
 		return {"error": "Could not capture viewport image"}
 
@@ -619,7 +626,10 @@ func _handle_detailed_errors() -> Dictionary:
 
 
 func _handle_open_scripts() -> Dictionary:
-	var script_editor = EditorInterface.get_script_editor()
+	if editor_interface == null:
+		return {"error": "editor_interface not available"}
+
+	var script_editor = editor_interface.get_script_editor()
 	if script_editor == null:
 		return {"error": "Script editor not available"}
 
@@ -640,12 +650,33 @@ func _handle_open_scripts() -> Dictionary:
 
 func _send_response(client: StreamPeerTCP, code: int, data: Dictionary):
 	var body = JSON.stringify(data)
+	var body_bytes: PackedByteArray = body.to_utf8_buffer()
 	var status_text = "OK" if code == 200 else "Error"
-	var response = "HTTP/1.1 %d %s\r\n" % [code, status_text]
-	response += "Content-Type: application/json\r\n"
-	response += "Content-Length: %d\r\n" % body.length()
-	response += "Connection: close\r\n"
-	response += "Access-Control-Allow-Origin: *\r\n"
-	response += "\r\n"
-	response += body
-	client.put_data(response.to_utf8_buffer())
+	var header = "HTTP/1.1 %d %s\r\n" % [code, status_text]
+	header += "Content-Type: application/json\r\n"
+	header += "Content-Length: %d\r\n" % body_bytes.size()
+	header += "Connection: close\r\n"
+	header += "Access-Control-Allow-Origin: *\r\n"
+	header += "\r\n"
+	client.put_data(header.to_utf8_buffer())
+	client.put_data(body_bytes)
+
+
+func _get_resource_filesystem():
+	if editor_interface == null:
+		return null
+	return editor_interface.get_resource_filesystem()
+
+
+func _get_edited_scene_root() -> Node:
+	if editor_interface == null:
+		return null
+	return editor_interface.get_edited_scene_root()
+
+
+func _get_editor_viewport(viewport_type: String):
+	if editor_interface == null:
+		return null
+	if viewport_type == "3d":
+		return editor_interface.get_editor_viewport_3d(0)
+	return editor_interface.get_editor_viewport_2d()
