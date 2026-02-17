@@ -12,6 +12,7 @@ import {
 } from "./asset-generator.js";
 
 const PROJECT_PATH = process.env.GODOT_PROJECT_PATH || ".";
+const QUALITY_REPORTS_DIR = resolve(PROJECT_PATH, ".claude", "quality_reports");
 
 // ---------------------------------------------------------------------------
 // Tool definitions (MCP schema)
@@ -293,7 +294,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_evaluate_quality_gates",
     description:
-      "Evaluate objective quality gates for a phase using project files and scene/config signals. For Phase 5+ this checks visual polish proxies (assets, FX, UI styling, layering, feedback cues). For Phase 6 it also checks flow/readiness proxies (main scene, menu/restart/pause flow markers, no pass stubs). Use this before godot_update_phase(..., 'completed') to see what is still missing.",
+      "Evaluate objective quality gates for a phase using project files and scene/config signals. For Phase 5+ this checks visual polish proxies (assets, FX, UI styling, layering, feedback cues). For Phase 6 it also checks flow/readiness proxies (main scene, menu/restart/pause flow markers, no pass stubs). Use this before godot_update_phase(..., 'completed') to see what is still missing. Saves a structured report to .claude/quality_reports.",
     inputSchema: {
       type: "object",
       properties: {
@@ -764,6 +765,15 @@ async function toolEvaluateQualityGates(phaseNumber, phaseName = "", qualityGate
     phaseName,
     qualityGates
   );
+  const qualityReportPath = await persistQualityReport(
+    evaluation,
+    "manual_evaluation",
+    { phase_name: phaseName || evaluation.phase_name }
+  );
+  if (qualityReportPath) {
+    evaluation.quality_report_path = qualityReportPath;
+    await bridge.sendLog(`[MCP] Quality report saved: ${qualityReportPath}`);
+  }
 
   const failedCount = evaluation.failed_quality_gates.length;
   if (failedCount > 0) {
@@ -782,6 +792,7 @@ async function toolEvaluateQualityGates(phaseNumber, phaseName = "", qualityGate
 
 async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
   let mergedQualityGates = qualityGates || {};
+  let qualityReportPath = "";
 
   // ── HARD GATE: reject phase completion if errors exist ──
   if (status === "completed") {
@@ -829,6 +840,17 @@ async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
         phaseName,
         mergedQualityGates
       );
+      qualityReportPath = await persistQualityReport(
+        qualityEval,
+        "phase_completion_check",
+        {
+          phase_name: phaseName || qualityEval.phase_name,
+          requested_status: status,
+        }
+      );
+      if (qualityReportPath) {
+        await bridge.sendLog(`[MCP] Quality report saved: ${qualityReportPath}`);
+      }
       mergedQualityGates = qualityEval.merged_quality_gates;
 
       if (!qualityEval.gates_passed) {
@@ -858,6 +880,7 @@ async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
           failed_quality_gates: qualityEval.failed_quality_gates,
           gate_details: qualityEval.gate_details,
           quality_metrics: qualityEval.quality_metrics,
+          quality_report_path: qualityReportPath,
         };
       }
     }
@@ -877,6 +900,7 @@ async function toolUpdatePhase(phaseNumber, phaseName, status, qualityGates) {
     phase_name: phaseName,
     status,
     quality_gates: mergedQualityGates,
+    quality_report_path: qualityReportPath,
   };
 }
 
@@ -1435,5 +1459,30 @@ function phaseNameForNumber(num) {
       return "Final QA";
     default:
       return `Phase ${num}`;
+  }
+}
+
+async function persistQualityReport(report, trigger, meta = {}) {
+  const timestampIso = new Date().toISOString();
+  const timestampSlug = timestampIso.replace(/[:.]/g, "-");
+  const phaseNumber = Number.isFinite(Number(report?.phase_number))
+    ? Number(report.phase_number)
+    : "x";
+  const fileName = `${timestampSlug}-phase${phaseNumber}-${trigger}.json`;
+  const filePath = resolve(QUALITY_REPORTS_DIR, fileName);
+  const payload = {
+    version: "1.0",
+    generated_at: timestampIso,
+    trigger,
+    meta,
+    report,
+  };
+
+  try {
+    await mkdir(QUALITY_REPORTS_DIR, { recursive: true });
+    await writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
+    return `res://.claude/quality_reports/${fileName}`;
+  } catch {
+    return "";
   }
 }

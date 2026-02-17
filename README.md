@@ -133,6 +133,7 @@ When you ask for a complete game, the Director runs a 6-phase build:
 
 Each phase has quality gates. Claude won't proceed until they pass.
 For Phase 5/6, `godot_update_phase(..., "completed")` also runs objective quality checks and rejects completion when required gates fail.
+Each quality evaluation is saved to `res://.claude/quality_reports/` for regression tracking.
 
 ## Build Resumption
 
