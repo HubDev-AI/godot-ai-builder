@@ -123,6 +123,7 @@ Target outcome for "very good game" status:
 ## Immediate Execution Order
 
 1. PoC PR A: define benchmark prompts + evaluator checklist + scoring schema.
+   - Artifacts: `docs/poc/benchmark-prompts.md`, `docs/poc/evaluator-checklist.md`, `docs/poc/quality-scoring-schema.json`
 2. PoC PR B: ship `pack_polish` installer/verifier slice with hard failure behavior.
 3. PoC PR C: wire rubric scoring + iteration policy (max 3 loops, then escalate).
 4. PoC Validation: run 3 benchmark builds, compare reports, publish Go/No-Go decision.
