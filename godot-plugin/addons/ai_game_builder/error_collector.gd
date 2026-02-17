@@ -279,35 +279,43 @@ func _to_project_res_path(path: String) -> String:
 
 ## Runs a headless Godot process to get detailed script error messages with
 ## file paths, line numbers, and actual error text.  BLOCKING — takes 2-5 s.
-## Falls back to the fast can_instantiate() list if headless validation fails.
+## Uses script-targeted probing only (avoids full-project headless runs that
+## can hang on project startup code/autoloads). Falls back to fast in-process
+## validation if probing fails.
 func get_detailed_errors() -> Array[Dictionary]:
 	var godot_path: String = OS.get_executable_path()
 	var project_path: String = ProjectSettings.globalize_path("res://")
 
-	var output: Array = []
-	OS.execute(
-		godot_path,
-		PackedStringArray(["--headless", "--path", project_path, "--quit"]),
-		output,
-		true  # read_stderr — error messages go to stderr
-	)
-
-	var full_output: String = _join_process_output(output)
-	var parsed_headless: Array[Dictionary] = _parse_headless_errors(full_output)
-	if not parsed_headless.is_empty() and not _all_errors_missing_line_info(parsed_headless):
-		return parsed_headless
-
 	var basic_errors: Array[Dictionary] = get_errors()
+	if basic_errors.is_empty():
+		return []
+
 	var script_probe_errors: Array[Dictionary] = _probe_scripts_for_detailed_errors(
 		godot_path,
 		project_path,
 		basic_errors
 	)
 	if not script_probe_errors.is_empty():
-		return script_probe_errors
+		var merged: Array[Dictionary] = []
+		merged.append_array(script_probe_errors)
 
-	if not parsed_headless.is_empty():
-		return parsed_headless
+		# Keep non-script and non-compilation issues from fast checks.
+		for err in basic_errors:
+			var file_path: String = str(err.get("file", ""))
+			var msg: String = str(err.get("message", "")).to_lower()
+			var is_generic_script_compile: bool = (
+				file_path.ends_with(".gd")
+				and (
+					"script has compilation errors" in msg
+					or "failed to load script" in msg
+					or "parse error" in msg
+				)
+			)
+			if not is_generic_script_compile:
+				merged.append(err)
+
+		return _deduplicate_entries(merged, 120)
+
 	return basic_errors
 
 
@@ -368,15 +376,6 @@ func _parse_headless_errors(full_output: String) -> Array[Dictionary]:
 		})
 
 	return _deduplicate_entries(errors, 120)
-
-
-func _all_errors_missing_line_info(entries: Array[Dictionary]) -> bool:
-	if entries.is_empty():
-		return true
-	for entry in entries:
-		if int(entry.get("line", -1)) >= 0:
-			return false
-	return true
 
 
 func _probe_scripts_for_detailed_errors(
