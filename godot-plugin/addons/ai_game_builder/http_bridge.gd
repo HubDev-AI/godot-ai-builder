@@ -9,7 +9,7 @@ var port: int = 6100
 
 var _server: TCPServer
 var _clients: Array[StreamPeerTCP] = []
-var _request_buffers: Dictionary = {}  # StreamPeerTCP -> String
+var _request_buffers: Dictionary = {}  # StreamPeerTCP -> PackedByteArray
 var _error_collector: RefCounted
 var _project_scanner: RefCounted
 var _phase_state: Dictionary = {}
@@ -56,7 +56,7 @@ func _process(_delta):
 		var peer = _server.take_connection()
 		if peer:
 			_clients.append(peer)
-			_request_buffers[peer] = ""
+			_request_buffers[peer] = PackedByteArray()
 
 	# Process existing connections
 	var to_remove: Array[int] = []
@@ -67,18 +67,25 @@ func _process(_delta):
 		match client.get_status():
 			StreamPeerTCP.STATUS_CONNECTED:
 				if client.get_available_bytes() > 0:
-					var data = client.get_utf8_string(client.get_available_bytes())
-					_request_buffers[client] = _request_buffers.get(client, "") + data
+					var read_result = client.get_data(client.get_available_bytes())
+					if read_result.size() < 2 or read_result[0] != OK:
+						to_remove.append(i)
+						continue
+
+					var chunk: PackedByteArray = read_result[1]
+					var buffer: PackedByteArray = _request_buffers.get(client, PackedByteArray())
+					buffer.append_array(chunk)
+					_request_buffers[client] = buffer
 
 					# Check if we have a complete HTTP request (headers + full body)
-					var buf: String = _request_buffers[client]
-					var header_end_pos = buf.find("\r\n\r\n")
+					var header_end_pos = _find_header_end(buffer)
 					if header_end_pos >= 0:
-						var content_len = _parse_content_length(buf.substr(0, header_end_pos))
+						var headers = buffer.slice(0, header_end_pos).get_string_from_utf8()
+						var content_len = _parse_content_length(headers)
 						var body_start = header_end_pos + 4
-						var body_received = buf.length() - body_start
+						var body_received = buffer.size() - body_start
 						if body_received >= content_len:
-							_handle_request(client, buf)
+							_handle_request(client, buffer.get_string_from_utf8())
 							to_remove.append(i)
 
 			StreamPeerTCP.STATUS_NONE, StreamPeerTCP.STATUS_ERROR:
@@ -99,6 +106,15 @@ func _parse_content_length(headers: String) -> int:
 		if line.to_lower().begins_with("content-length:"):
 			return line.substr(15).strip_edges().to_int()
 	return 0
+
+
+func _find_header_end(buffer: PackedByteArray) -> int:
+	if buffer.size() < 4:
+		return -1
+	for i in range(buffer.size() - 3):
+		if buffer[i] == 13 and buffer[i + 1] == 10 and buffer[i + 2] == 13 and buffer[i + 3] == 10:
+			return i
+	return -1
 
 
 func _handle_request(client: StreamPeerTCP, raw: String):

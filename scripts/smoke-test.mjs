@@ -183,7 +183,9 @@ async function run() {
       name: "log",
       method: "POST",
       path: "/log",
-      body: { message: `[SmokeTest] Bridge check ${new Date().toISOString()}` },
+      body: {
+        message: `[SmokeTest] UTF-8 check \u2014 phase \u2713 ${new Date().toISOString()}`,
+      },
       validate(payload) {
         assert(payload.ok === true, "Expected ok=true");
       },
