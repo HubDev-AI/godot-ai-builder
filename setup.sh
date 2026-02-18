@@ -86,7 +86,34 @@ cp -r "$SCRIPT_DIR/knowledge/"* "$GODOT_PROJECT/knowledge/"
 echo -e "${GREEN}✓${NC} Knowledge base installed"
 
 # ---------------------------------------------------------------------------
-# 6. Done
+# 6. Create a local Claude launcher (prevents missing --plugin-dir)
+# ---------------------------------------------------------------------------
+echo "Creating Claude launcher script..."
+LAUNCHER="$GODOT_PROJECT/start-claude-ai-builder.sh"
+cat > "$LAUNCHER" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+PLUGIN_DIR="$SCRIPT_DIR"
+
+cd "\$PROJECT_DIR"
+
+if ! command -v claude >/dev/null 2>&1; then
+    echo "Error: claude CLI not found in PATH."
+    exit 1
+fi
+
+echo "Starting Claude with AI Game Builder plugin..."
+echo "Project: \$PROJECT_DIR"
+echo "Plugin: \$PLUGIN_DIR"
+exec claude --plugin-dir "\$PLUGIN_DIR" "\$@"
+EOF
+chmod +x "$LAUNCHER"
+echo -e "${GREEN}✓${NC} Launcher created at $LAUNCHER"
+
+# ---------------------------------------------------------------------------
+# 7. Done
 # ---------------------------------------------------------------------------
 echo ""
 echo "================================================"
@@ -98,18 +125,26 @@ echo ""
 echo "  1. Open your Godot project in the editor"
 echo "  2. Go to Project → Project Settings → Plugins"
 echo "  3. Enable \"AI Game Builder\""
+echo "  4. Close any existing Claude sessions (MCP tools load only at startup)"
 echo ""
-echo "  4. Install the Claude Code plugin (choose one):"
+echo "  5. Start Claude with the plugin loaded:"
 echo ""
-echo "     Option A — Load directly from this directory:"
+echo "     Recommended:"
 echo "       cd $GODOT_PROJECT"
+echo "       ./start-claude-ai-builder.sh"
+echo ""
+echo "     Equivalent manual command:"
 echo "       claude --plugin-dir $SCRIPT_DIR"
 echo ""
-echo "     Option B — Install from marketplace:"
+echo "     Marketplace option:"
 echo "       /plugin marketplace add https://github.com/you/godot-ai-builder"
 echo "       /plugin install godot-ai-builder"
 echo ""
-echo "  5. Tell Claude what to build:"
+echo "  6. In Claude, verify MCP tools are loaded:"
+echo "     Ask: \"What MCP tools are available?\""
+echo "     Expected: godot_get_project_state, godot_run_scene, godot_get_errors, ..."
+echo ""
+echo "  7. Tell Claude what to build:"
 echo ""
 echo "     From a prompt:"
 echo "       \"Create a 2D shooter with enemies and score\""
@@ -117,5 +152,5 @@ echo ""
 echo "     From a design folder:"
 echo "       \"Build the game from the docs in ~/my-game-design/\""
 echo ""
-echo "  The MCP server starts automatically — no manual server launch needed."
+echo "  The MCP server starts automatically when Claude loads this plugin."
 echo ""

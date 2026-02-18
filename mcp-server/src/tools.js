@@ -411,7 +411,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "godot_log",
     description:
-      "⚠️ MANDATORY — Send a progress message to the Godot editor dock panel. You MUST call this tool constantly throughout the entire build process. The dock panel is the user's PRIMARY way to monitor what you are doing — if you don't call this, the user sees NOTHING happening and thinks the build is stuck.\n\nYou MUST call godot_log:\n- BEFORE writing every file (what you're about to write and why)\n- AFTER writing every file (confirm it's done, line count)\n- When starting each build phase\n- When finishing each build phase (with quality gate results)\n- When encountering errors (what the error is)\n- When fixing errors (what the fix was)\n- Before and after running scenes\n- Before and after checking errors\n- When making any decision (what you chose and why)\n\nAim for 3-5 godot_log calls per file write. Call it between every 2-3 other tool calls at minimum. MORE IS BETTER — the user wants constant visibility.",
+      "⚠️ MANDATORY — Send a progress message to the Godot editor dock panel. You MUST call this tool throughout the build so the user can see progress.\n\nYou MUST call godot_log:\n- BEFORE writing every file (what you're about to write)\n- AFTER writing every file (confirm completion)\n- When starting/finishing each phase\n- When an error appears and when it is fixed\n- Before/after scene runs and error checks\n\nExecution watchdog:\n- Keep log messages short (one line).\n- Do NOT output long internal monologue or repeated planning text.\n- After logging intent, perform a concrete action immediately.\n- If you hit repeated non-mutating steps and cannot proceed, output STALLED with the exact blocker.\n\nAim for frequent, concise visibility without replacing execution.",
     inputSchema: {
       type: "object",
       properties: {
@@ -777,6 +777,38 @@ async function toolStopScene() {
 
 async function toolGetErrors(detailed = true) {
   if (detailed) {
+    // Defensive preflight: when there are many compile errors, detailed probing can
+    // overwhelm the editor bridge. In that state, fast errors are enough to unblock.
+    let fastBaseline = null;
+    try {
+      fastBaseline = await bridge.getErrors();
+    } catch {
+      fastBaseline = null;
+    }
+    const baselineErrorCount = fastBaseline?.errors?.length || 0;
+    const skipDetailedThreshold = Number.parseInt(
+      process.env.GODOT_DETAILED_SKIP_THRESHOLD || "8",
+      10
+    );
+    if (
+      Number.isFinite(skipDetailedThreshold) &&
+      skipDetailedThreshold > 0 &&
+      baselineErrorCount >= skipDetailedThreshold &&
+      fastBaseline
+    ) {
+      await bridge.sendLog(
+        `[MCP] Skipping detailed check (${baselineErrorCount} errors >= ${skipDetailedThreshold} threshold); using fast errors to keep editor responsive.`
+      );
+      const warnCount = fastBaseline.warnings?.length || 0;
+      return {
+        ...fastBaseline,
+        _detailed_skipped: true,
+        _detailed_skip_reason:
+          `Too many active errors (${baselineErrorCount}). Detailed mode deferred until error count is below ${skipDetailedThreshold}.`,
+        _detailed_skip_threshold: skipDetailedThreshold,
+      };
+    }
+
     await bridge.sendLog("[MCP] Running detailed error check (headless validation)...");
     try {
       const result = await bridge.getDetailedErrors();
@@ -787,7 +819,7 @@ async function toolGetErrors(detailed = true) {
     } catch (err) {
       // If detailed check fails (timeout, etc.), fall back to fast check
       await bridge.sendLog(`[MCP] Detailed check failed (${err.message}), falling back to fast check...`);
-      const result = await bridge.getErrors();
+      const result = fastBaseline ?? await bridge.getErrors();
       const errCount = result.errors?.length || 0;
       const warnCount = result.warnings?.length || 0;
       await bridge.sendLog(`[MCP] Fast check: ${errCount} errors, ${warnCount} warnings`);

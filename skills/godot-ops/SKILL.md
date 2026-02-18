@@ -40,6 +40,13 @@ godot_log("Game running. 0 errors. Phase 1 complete.")
 - Aim for 3-5 `godot_log` calls per file write minimum
 - MORE IS ALWAYS BETTER — the user wants constant activity in the dock
 
+## ⛔ EXECUTION WATCHDOG (ANTI-STALL)
+
+1. Keep terminal/dock updates short; no long `Thinking...` narratives.
+2. Do not perform more than 3 non-mutating MCP calls in a row without a concrete progress step.
+3. Concrete progress means: file edits, scene mutation, asset generation/application, scene run/stop, phase update, or quality scoring.
+4. If blocked, output exactly `STALLED: <exact blocker>` and stop instead of looping.
+
 ## The Core Loop
 
 After writing ANY game files, ALWAYS execute this loop immediately:
