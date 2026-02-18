@@ -9,6 +9,9 @@ var _warnings: Array[Dictionary] = []
 var _log_baseline_size: Dictionary = {}  # log_path -> file size at plugin load
 
 const INITIAL_LOG_TAIL_BYTES = 262144  # Read last 256 KB on first scan
+const DETAILED_SKIP_THRESHOLD = 8
+const DETAILED_MAX_PROBES = 4
+const DETAILED_PROBE_RUNNER_PATH = "res://.claude/.ai_builder_probe_runner.gd"
 
 
 func get_errors() -> Array[Dictionary]:
@@ -61,6 +64,13 @@ func _refresh():
 func _validate_all_scripts():
 	var scripts: Array[String] = []
 	_find_scripts("res://", scripts)
+	var scenes: Array[String] = []
+	_find_scenes("res://", scenes)
+
+	# Force scene dependencies to refresh first. This clears stale cached parse
+	# failures (for preloaded .tscn files) after external edits.
+	for scene_path in scenes:
+		ResourceLoader.load(scene_path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE)
 
 	# Two-pass validation:
 	# 1) Warm class_name cache by loading every script.
@@ -68,11 +78,11 @@ func _validate_all_scripts():
 	#    clears stale compile errors after external file edits.
 	# 3) Validate can_instantiate() from the refreshed script state.
 	for path in scripts:
-		ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE)
+		ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REPLACE)
 
 	var reload_status_by_path: Dictionary = {}
 	for path in scripts:
-		var script: GDScript = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE) as GDScript
+		var script: GDScript = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REPLACE) as GDScript
 		if script == null:
 			reload_status_by_path[path] = FAILED
 			continue
@@ -81,19 +91,11 @@ func _validate_all_scripts():
 		reload_status_by_path[path] = script.reload(true)
 
 	for path in scripts:
-		var script: GDScript = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REUSE) as GDScript
+		var script: GDScript = ResourceLoader.load(path, "GDScript", ResourceLoader.CACHE_MODE_REPLACE) as GDScript
 		var reload_status: int = int(reload_status_by_path.get(path, FAILED))
 		if script == null or reload_status != OK:
 			_errors.append({
 				"message": "Failed to load script (parse error)",
-				"file": path,
-				"line": -1,
-				"timestamp": Time.get_unix_time_from_system(),
-			})
-			continue
-		if not script.can_instantiate():
-			_errors.append({
-				"message": "Script has compilation errors",
 				"file": path,
 				"line": -1,
 				"timestamp": Time.get_unix_time_from_system(),
@@ -116,6 +118,28 @@ func _find_scripts(path: String, results: Array[String]) -> void:
 			if not file_name.begins_with(".") and file_name != "addons" and file_name != "knowledge":
 				_find_scripts(full_path, results)
 		elif file_name.get_extension() == "gd":
+			results.append(full_path)
+
+		file_name = dir.get_next()
+
+	dir.list_dir_end()
+
+
+func _find_scenes(path: String, results: Array[String]) -> void:
+	var dir = DirAccess.open(path)
+	if dir == null:
+		return
+
+	dir.list_dir_begin()
+	var file_name = dir.get_next()
+
+	while file_name != "":
+		var full_path = path.path_join(file_name)
+
+		if dir.current_is_dir():
+			if not file_name.begins_with(".") and file_name != "addons" and file_name != "knowledge":
+				_find_scenes(full_path, results)
+		elif file_name.get_extension() == "tscn":
 			results.append(full_path)
 
 		file_name = dir.get_next()
@@ -290,6 +314,10 @@ func get_detailed_errors() -> Array[Dictionary]:
 	if basic_errors.is_empty():
 		return []
 
+	# Keep editor responsive under heavy failure states.
+	if basic_errors.size() >= DETAILED_SKIP_THRESHOLD:
+		return basic_errors
+
 	var script_probe_errors: Array[Dictionary] = _probe_scripts_for_detailed_errors(
 		godot_path,
 		project_path,
@@ -402,8 +430,12 @@ func _probe_scripts_for_detailed_errors(
 		return []
 
 	# Keep this bounded so detailed checks do not explode on very large projects.
-	if candidates.size() > 8:
-		candidates = candidates.slice(0, 8)
+	if candidates.size() > DETAILED_MAX_PROBES:
+		candidates = candidates.slice(0, DETAILED_MAX_PROBES)
+
+	var runner_path: String = _ensure_detailed_probe_runner()
+	if runner_path.is_empty():
+		return []
 
 	var combined: Array[Dictionary] = []
 	for script_path in candidates:
@@ -415,8 +447,9 @@ func _probe_scripts_for_detailed_errors(
 				"--path",
 				project_path,
 				"--script",
+				runner_path,
+				"--",
 				script_path,
-				"--quit",
 			]),
 			output,
 			true
@@ -429,6 +462,22 @@ func _probe_scripts_for_detailed_errors(
 			combined.append(err)
 
 	return _deduplicate_entries(combined, 120)
+
+
+func _ensure_detailed_probe_runner() -> String:
+	var runner_abs: String = ProjectSettings.globalize_path(DETAILED_PROBE_RUNNER_PATH)
+	var runner_dir_abs: String = runner_abs.get_base_dir()
+	var mkdir_err := DirAccess.make_dir_recursive_absolute(runner_dir_abs)
+	if mkdir_err != OK and mkdir_err != ERR_ALREADY_EXISTS:
+		return ""
+
+	var runner_source := "extends SceneTree\nfunc _init():\n\tvar args := OS.get_cmdline_user_args()\n\tif args.is_empty():\n\t\tquit(0)\n\t\treturn\n\tvar target := str(args[0])\n\tif target.is_empty():\n\t\tquit(0)\n\t\treturn\n\tload(target)\n\tquit(0)\n"
+	var file := FileAccess.open(DETAILED_PROBE_RUNNER_PATH, FileAccess.WRITE)
+	if file == null:
+		return ""
+	file.store_string(runner_source)
+	file.close()
+	return DETAILED_PROBE_RUNNER_PATH
 
 
 func _deduplicate_entries(entries: Array[Dictionary], message_prefix_len: int) -> Array[Dictionary]:

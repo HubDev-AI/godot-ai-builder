@@ -910,6 +910,14 @@ You MUST report progress in TWO places after EVERY action:
 
 **IMPORTANT**: The Stop hook will prevent Claude from finishing while `.claude/.build_in_progress` exists. If the user explicitly asks to cancel, remove the file before stopping.
 
+## ⛔ EXECUTION WATCHDOG (ANTI-STALL)
+
+1. Do NOT emit long internal monologue (`Thinking...`, repeated architecture/planning loops).
+2. After pre-flight, allow at most 3 consecutive non-mutating tool calls before concrete progress.
+3. Concrete progress means at least one of: write/edit game files, generate/apply assets, mutate scene nodes, run/stop scene, update phase, or score quality.
+4. If blocked and no concrete step is possible, output exactly `STALLED: <exact blocker>` and stop.
+5. For benchmark/quality loops, do not stop before `godot_run_scene` + `godot_score_poc_quality` (unless blocked).
+
 ## COLOR PALETTES (pre-designed, pick one)
 
 ### Neon Arcade

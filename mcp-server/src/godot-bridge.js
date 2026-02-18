@@ -6,6 +6,10 @@
 const BRIDGE_PORT = parseInt(process.env.GODOT_BRIDGE_PORT || "6100", 10);
 const BRIDGE_HOST = process.env.GODOT_BRIDGE_HOST || "127.0.0.1";
 const BRIDGE_TIMEOUT = 5000;
+const BRIDGE_DETAILED_TIMEOUT = parseInt(
+  process.env.GODOT_BRIDGE_DETAILED_TIMEOUT || "8000",
+  10
+);
 
 function bridgeUrl(path) {
   return `http://${BRIDGE_HOST}:${BRIDGE_PORT}${path}`;
@@ -137,8 +141,10 @@ export async function getOpenScripts() {
 }
 
 export async function getDetailedErrors() {
-  // Headless Godot validation takes 2-10 seconds — use longer timeout
-  return bridgeRequest("GET", "/detailed_errors", null, 30000);
+  // Keep this bounded — long waits make sessions feel hung and can cascade into
+  // "editor not responding" retries. Server-side now skips heavy detailed mode
+  // under large error sets.
+  return bridgeRequest("GET", "/detailed_errors", null, BRIDGE_DETAILED_TIMEOUT);
 }
 
 export async function isConnected() {

@@ -188,6 +188,14 @@ If MCP tools fail or aren't available, tell the user: "MCP tools not loaded. Sta
 
 **Every tool response includes a reminder to call `godot_log`. Follow it.**
 
+## ⛔ EXECUTION WATCHDOG (ANTI-STALL)
+
+1. Do NOT output long internal monologue (`Thinking...`, architecture essays, repeated plans).
+2. After pre-flight checks, you may do at most 3 consecutive non-mutating tool calls before a concrete progress step.
+3. Concrete progress means at least one of: write/edit game files, generate/apply assets, mutate scene nodes, run/stop scene, update phase, or score quality.
+4. If blocked and you cannot make concrete progress, output exactly `STALLED: <exact blocker>` and stop.
+5. For PoC benchmark runs, do not stop before both `godot_run_scene` and `godot_score_poc_quality` are called (unless blocked).
+
 ## Critical Rules
 
 ### GDScript

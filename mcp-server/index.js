@@ -27,10 +27,97 @@ const SKIP_ERROR_CHECK = new Set([
   "godot_get_class_info",
 ]);
 
+// Tools that represent concrete progress (file/scene/runtime/progress mutation).
+const MUTATING_PROGRESS_TOOLS = new Set([
+  "godot_generate_asset",
+  "godot_generate_asset_pack",
+  "godot_install_addon",
+  "godot_apply_integration_pack",
+  "godot_add_node",
+  "godot_update_node",
+  "godot_delete_node",
+  "godot_save_build_state",
+  "godot_update_phase",
+  "godot_run_scene",
+  "godot_stop_scene",
+  "godot_score_poc_quality",
+]);
+
+const STALL_GUARD_INITIAL_LIMIT = parsePositiveInt(
+  process.env.GODOT_STALL_GUARD_INITIAL,
+  4
+);
+const STALL_GUARD_STEADY_LIMIT = parsePositiveInt(
+  process.env.GODOT_STALL_GUARD_STEADY,
+  6
+);
+
+const stallGuardState = {
+  totalCalls: 0,
+  nonMutatingStreak: 0,
+  sawMutatingProgress: false,
+  lastMutatingTool: "",
+  lastMutatingCall: 0,
+};
+
+function parsePositiveInt(raw, fallback) {
+  const parsed = Number.parseInt(raw ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
+
+function isMutatingProgressTool(name) {
+  return MUTATING_PROGRESS_TOOLS.has(name);
+}
+
+function currentStallLimit() {
+  return stallGuardState.sawMutatingProgress
+    ? STALL_GUARD_STEADY_LIMIT
+    : STALL_GUARD_INITIAL_LIMIT;
+}
+
+function updateStallGuard(name) {
+  stallGuardState.totalCalls += 1;
+
+  if (isMutatingProgressTool(name)) {
+    stallGuardState.nonMutatingStreak = 0;
+    stallGuardState.sawMutatingProgress = true;
+    stallGuardState.lastMutatingTool = name;
+    stallGuardState.lastMutatingCall = stallGuardState.totalCalls;
+    return;
+  }
+
+  // Dock logs are visibility signals; don't count them as progress or stall.
+  if (name === "godot_log") {
+    return;
+  }
+
+  stallGuardState.nonMutatingStreak += 1;
+}
+
+function getStallGuardPayload() {
+  const limit = currentStallLimit();
+  if (stallGuardState.nonMutatingStreak < limit) return null;
+
+  return {
+    triggered: true,
+    non_mutating_streak: stallGuardState.nonMutatingStreak,
+    limit,
+    last_progress_tool: stallGuardState.lastMutatingTool || null,
+    last_progress_call: stallGuardState.lastMutatingCall || null,
+    action_required:
+      "STALL GUARD: Too many non-mutating MCP calls in a row. " +
+      "Your next step must be concrete progress: write game files, " +
+      "generate/apply assets, mutate scene nodes, run scene, update phase, or score quality. " +
+      "If blocked, print STALLED with the exact blocker.",
+  };
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
     const result = await handleToolCall(name, args || {});
+    updateStallGuard(name);
 
     // ── Append live error count to every tool response ──
     // This ensures the AI ALWAYS sees its current error state.
@@ -55,6 +142,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         "IMPORTANT: Call godot_log() now to tell the user what you are doing next. " +
         "The Godot dock panel is the user's primary progress monitor. " +
         "Also call godot_update_phase() whenever you start or finish a build phase.";
+    }
+
+    const stallGuard = getStallGuardPayload();
+    if (stallGuard) {
+      result._stall_guard = stallGuard;
+      if (stallGuard.non_mutating_streak >= stallGuard.limit + 2) {
+        const hardAction =
+          "STALL GUARD HARD LIMIT: Stop planning loops. " +
+          "Immediately execute a mutating step or report STALLED with blocker.";
+        result._action_required = result._action_required
+          ? `${result._action_required} ${hardAction}`
+          : hardAction;
+      }
     }
 
     return {
