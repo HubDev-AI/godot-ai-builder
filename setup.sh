@@ -86,31 +86,61 @@ cp -r "$SCRIPT_DIR/knowledge/"* "$GODOT_PROJECT/knowledge/"
 echo -e "${GREEN}✓${NC} Knowledge base installed"
 
 # ---------------------------------------------------------------------------
-# 6. Create a local Claude launcher (prevents missing --plugin-dir)
+# 6. Create local launchers (backend switch + Claude compatibility wrapper)
 # ---------------------------------------------------------------------------
-echo "Creating Claude launcher script..."
-LAUNCHER="$GODOT_PROJECT/start-claude-ai-builder.sh"
+echo "Creating launcher scripts..."
+LAUNCHER="$GODOT_PROJECT/start-ai-builder.sh"
 cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
 PROJECT_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
 PLUGIN_DIR="$SCRIPT_DIR"
+BACKEND="\${AI_BUILDER_BACKEND:-cloud}"
 
 cd "\$PROJECT_DIR"
 
-if ! command -v claude >/dev/null 2>&1; then
-    echo "Error: claude CLI not found in PATH."
+case "\$BACKEND" in
+  cloud|claude)
+    if ! command -v claude >/dev/null 2>&1; then
+      echo "Error: claude CLI not found in PATH."
+      exit 1
+    fi
+    echo "Starting AI Game Builder with backend: \$BACKEND"
+    echo "Project: \$PROJECT_DIR"
+    echo "Plugin: \$PLUGIN_DIR"
+    exec claude --plugin-dir "\$PLUGIN_DIR" "\$@"
+    ;;
+  local_codex|codex)
+    if ! command -v codex >/dev/null 2>&1; then
+      echo "Error: codex CLI not found in PATH."
+      exit 1
+    fi
+    echo "Starting AI Game Builder with backend: \$BACKEND"
+    echo "Project: \$PROJECT_DIR"
+    echo "Using Codex local execution mode."
+    exec codex --cd "\$PROJECT_DIR" "\$@"
+    ;;
+  *)
+    echo "Error: unknown AI_BUILDER_BACKEND '\$BACKEND'."
+    echo "Supported values: cloud, local_codex"
     exit 1
-fi
-
-echo "Starting Claude with AI Game Builder plugin..."
-echo "Project: \$PROJECT_DIR"
-echo "Plugin: \$PLUGIN_DIR"
-exec claude --plugin-dir "\$PLUGIN_DIR" "\$@"
+    ;;
+esac
 EOF
 chmod +x "$LAUNCHER"
 echo -e "${GREEN}✓${NC} Launcher created at $LAUNCHER"
+
+# Backward compatible wrapper.
+LEGACY_LAUNCHER="$GODOT_PROJECT/start-claude-ai-builder.sh"
+cat > "$LEGACY_LAUNCHER" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export AI_BUILDER_BACKEND=cloud
+exec "\$(cd "\$(dirname "\$0")" && pwd)/start-ai-builder.sh" "\$@"
+EOF
+chmod +x "$LEGACY_LAUNCHER"
+echo -e "${GREEN}✓${NC} Legacy launcher created at $LEGACY_LAUNCHER"
 
 # ---------------------------------------------------------------------------
 # 7. Done
@@ -127,11 +157,17 @@ echo "  2. Go to Project → Project Settings → Plugins"
 echo "  3. Enable \"AI Game Builder\""
 echo "  4. Close any existing Claude sessions (MCP tools load only at startup)"
 echo ""
-echo "  5. Start Claude with the plugin loaded:"
+echo "  5. Start the agent backend:"
 echo ""
 echo "     Recommended:"
 echo "       cd $GODOT_PROJECT"
-echo "       ./start-claude-ai-builder.sh"
+echo "       ./start-ai-builder.sh"
+echo ""
+echo "     Cloud backend (Claude):"
+echo "       AI_BUILDER_BACKEND=cloud ./start-ai-builder.sh"
+echo ""
+echo "     Local backend (Codex):"
+echo "       AI_BUILDER_BACKEND=local_codex ./start-ai-builder.sh"
 echo ""
 echo "     Equivalent manual command:"
 echo "       claude --plugin-dir $SCRIPT_DIR"

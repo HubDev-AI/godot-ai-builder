@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-02-17T21:47:57.572Z",
+  "trigger": "phase_completion_check",
+  "meta": {
+    "phase_name": "Polish & Game Feel",
+    "requested_status": "completed"
+  },
+  "report": {
+    "ok": false,
+    "phase_number": 5,
+    "phase_name": "Polish & Game Feel",
+    "gates_passed": false,
+    "failed_quality_gates": [
+      "auto_visual_assets_coverage",
+      "auto_ui_styling_signals",
+      "auto_polish_fx_signals",
+      "auto_visual_depth_layering",
+      "auto_feedback_event_coverage"
+    ],
+    "computed_quality_gates": {
+      "auto_visual_assets_coverage": false,
+      "auto_ui_styling_signals": false,
+      "auto_polish_fx_signals": false,
+      "auto_visual_depth_layering": false,
+      "auto_feedback_event_coverage": false
+    },
+    "merged_quality_gates": {
+      "manual": true,
+      "auto_visual_assets_coverage": false,
+      "auto_ui_styling_signals": false,
+      "auto_polish_fx_signals": false,
+      "auto_visual_depth_layering": false,
+      "auto_feedback_event_coverage": false
+    },
+    "gate_details": {
+      "auto_visual_assets_coverage": {
+        "passed": false,
+        "expected": ">= 6 image assets used for gameplay/UI",
+        "actual": 0,
+        "hint": "Generate or import more coherent assets (godot_generate_asset_pack + targeted assets)."
+      },
+      "auto_ui_styling_signals": {
+        "passed": false,
+        "expected": ">= 2 UI styling markers",
+        "actual": {
+          "count": 0,
+          "hits": []
+        },
+        "hint": "Style menus/HUD with theme overrides, StyleBoxFlat, or custom theme APIs."
+      },
+      "auto_polish_fx_signals": {
+        "passed": false,
+        "expected": ">= 3 polish/FX markers",
+        "actual": {
+          "count": 0,
+          "hits": []
+        },
+        "hint": "Add screen shake, particles, shaders, tweens, trails, or hit/death FX."
+      },
+      "auto_visual_depth_layering": {
+        "passed": false,
+        "expected": ">= 2 depth/layering markers",
+        "actual": {
+          "count": 0,
+          "hits": []
+        },
+        "hint": "Add layered background/foreground composition (e.g. parallax, vignette, gradient layers)."
+      },
+      "auto_feedback_event_coverage": {
+        "passed": false,
+        "expected": ">= 3 feedback event categories",
+        "actual": {
+          "count": 0,
+          "categories": []
+        },
+        "hint": "Ensure hit/damage, death, pickup/score, and ability events have explicit feedback hooks."
+      }
+    },
+    "quality_metrics": {
+      "script_count": 0,
+      "scene_count": 0,
+      "image_asset_count": 0,
+      "audio_asset_count": 0,
+      "main_scene": "",
+      "resolved_main_scene_path": "",
+      "main_scene_exists": false,
+      "ui_style_hits": 0,
+      "polish_fx_hits": 0,
+      "depth_layer_hits": 0,
+      "feedback_category_count": 0,
+      "flow_category_count": 0,
+      "pass_stub_count": 0
+    }
+  }
+}

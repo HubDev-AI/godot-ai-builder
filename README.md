@@ -1,29 +1,29 @@
 # AI Game Builder
 
-A Claude Code plugin that generates playable Godot 4 games from natural language prompts.
+A game-builder plugin stack for Godot 4 that generates playable games from natural language prompts.
 
 ## How It Works
 
 ```
 You (natural language prompts)
     |
-Claude Code + AI Game Builder plugin
-    |                         |
-Writes .gd/.tscn          MCP Server (godot-bridge)
-directly to disk               |
-    |                    Godot Editor Plugin (HTTP on port 6100)
-    |                         |
-Godot auto-reloads      Run / Stop / Get Errors
+Agent backend (cloud or local_codex) + AI Game Builder plugin stack
+    |                                      |
+Writes .gd/.tscn                       MCP Server (godot-bridge)
+directly to disk                            |
+    |                                 Godot Editor Plugin (HTTP on port 6100)
+    |                                      |
+Godot auto-reloads                   Run / Stop / Get Errors
 ```
 
-Claude Code is the brain. The plugin gives it 14 specialized game development skills, 28 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
+The backend agent is the brain. The plugin gives it 14 specialized game development skills, 28 MCP tools for deep editor integration, and a Stop hook that keeps it focused until the build is complete.
 
 ## Install
 
-### Step 1: Install the Claude Code plugin
+### Step 1: Install the plugin stack
 
 ```bash
-# Option A — Load directly (for development/testing)
+# Option A — Cloud backend via Claude (development/testing)
 claude --plugin-dir /path/to/godot-ai-builder
 
 # Option B — Install from marketplace
@@ -50,17 +50,29 @@ This copies the HTTP bridge plugin into your Godot project's `addons/` folder an
 
 ```bash
 cd /path/to/your/godot/project
-claude --plugin-dir /path/to/godot-ai-builder
+./start-ai-builder.sh
 ```
 
-Then tell Claude what you want:
+Then tell the agent what you want:
 ```
 Make a shooter game
 ```
 
-Claude will ask whether you want a **full game** (6-phase build with PRD, enemies, UI, polish) or a **simple game** (minimal, fast, playable). Give a detailed prompt to skip the question and go straight to building.
+It will ask whether you want a **full game** (6-phase build with PRD, enemies, UI, polish) or a **simple game** (minimal, fast, playable). Give a detailed prompt to skip the question and go straight to building.
 
-For full games, Claude also asks about your preferred **visual tier**: procedural (shaders, gradients, glow effects — default), custom art (you provide sprites), AI-generated art (generates prompts for DALL-E/Midjourney), or prototype (basic shapes).
+For full games, it also asks about your preferred **visual tier**: procedural (shaders, gradients, glow effects — default), custom art (you provide sprites), AI-generated art (generates prompts for DALL-E/Midjourney), or prototype (basic shapes).
+
+### Backend Modes (MVP)
+
+Use `AI_BUILDER_BACKEND` with `start-ai-builder.sh`:
+
+```bash
+# Cloud backend (Claude + plugin-dir)
+AI_BUILDER_BACKEND=cloud ./start-ai-builder.sh
+
+# Local backend (Codex, local execution direction)
+AI_BUILDER_BACKEND=local_codex ./start-ai-builder.sh
+```
 
 ## Plugin Contents
 
@@ -177,7 +189,8 @@ No more re-explaining your game after a session crash.
 
 - **Godot 4.3+** (editor must be open during generation)
 - **Node.js 20+** (for the MCP server)
-- **Claude Code 1.0.33+** (plugin support required)
+- **Claude Code 1.0.33+** for `cloud` backend (plugin support required)
+- **Codex CLI** for `local_codex` backend mode
 
 ## Smoke Test
 
@@ -197,6 +210,17 @@ You can also override host/port if needed:
 
 ```bash
 node scripts/smoke-test.mjs --host 127.0.0.1 --port 6100 --timeout 7000
+```
+
+Direct bridge CLI wrapper (useful outside MCP tool wiring):
+
+```bash
+chmod +x scripts/godot-bridge-cli.sh
+scripts/godot-bridge-cli.sh status
+scripts/godot-bridge-cli.sh errors
+scripts/godot-bridge-cli.sh run
+scripts/godot-bridge-cli.sh stop
+scripts/godot-bridge-cli.sh log "Manual bridge test"
 ```
 
 PoC quality summary (from saved rubric reports):
@@ -229,6 +253,14 @@ node scripts/poc-benchmark-compare.mjs \
 ```
 
 See also benchmark run procedure: `docs/poc/benchmark-runbook.md`.
+
+MVP first add-on GO/NO_GO check (`pack_polish`):
+
+```bash
+node scripts/mvp-pack-polish-check.mjs \
+  --project /path/to/godot/project \
+  --json
+```
 
 ## Project Structure
 

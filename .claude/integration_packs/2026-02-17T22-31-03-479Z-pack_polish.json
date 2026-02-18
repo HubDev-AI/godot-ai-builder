@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-02-17T22:31:03.479Z",
+  "report": {
+    "pack_id": "pack_polish",
+    "strict_mode": true,
+    "ok": true,
+    "results": [
+      {
+        "addon_id": "phantom_camera",
+        "install": {
+          "ok": true,
+          "addon_id": "phantom_camera",
+          "install_attempted": true,
+          "verification": {
+            "passed": true,
+            "required_files": [
+              "res://addons/phantom_camera/plugin.cfg",
+              "res://addons/phantom_camera/plugin.gd"
+            ],
+            "present_files": [
+              "res://addons/phantom_camera/plugin.cfg",
+              "res://addons/phantom_camera/plugin.gd"
+            ],
+            "missing_files": [],
+            "plugin_listed_in_project_settings": false,
+            "remediation": []
+          }
+        },
+        "verify": {
+          "ok": true,
+          "addon_id": "phantom_camera",
+          "verification": {
+            "passed": true,
+            "required_files": [
+              "res://addons/phantom_camera/plugin.cfg",
+              "res://addons/phantom_camera/plugin.gd"
+            ],
+            "present_files": [
+              "res://addons/phantom_camera/plugin.cfg",
+              "res://addons/phantom_camera/plugin.gd"
+            ],
+            "missing_files": [],
+            "plugin_listed_in_project_settings": false,
+            "remediation": []
+          }
+        },
+        "ok": true
+      }
+    ]
+  }
+}

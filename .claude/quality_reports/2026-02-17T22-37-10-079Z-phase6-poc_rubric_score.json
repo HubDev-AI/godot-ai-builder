@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-02-17T22:37:10.079Z",
+  "trigger": "poc_rubric_score",
+  "meta": {
+    "benchmark_id": "poc_prompt_01",
+    "run_id": "poc_prompt_01-1771367830078",
+    "iteration_count": 1,
+    "max_iterations": 3
+  },
+  "report": {
+    "ok": true,
+    "phase_number": 6,
+    "phase_name": "Final QA (PoC Rubric)",
+    "schema_version": "poc-quality-report-v1",
+    "benchmark_id": "poc_prompt_01",
+    "run_id": "poc_prompt_01-1771367830078",
+    "timestamp_utc": "2026-02-17T22:37:10.079Z",
+    "max_iterations": 3,
+    "iteration_count": 1,
+    "objective_quality": {
+      "gates_passed": true,
+      "failed_quality_gates": [],
+      "quality_report_paths": []
+    },
+    "hard_gates": {
+      "zero_script_errors": true,
+      "no_critical_warnings": true,
+      "play_loop_complete": true,
+      "controls_clear": true,
+      "no_soft_lock": true,
+      "quality_gates_passed": true
+    },
+    "anti_tutorial_visual_checks": {
+      "named_art_direction": true,
+      "palette_discipline": true,
+      "silhouette_readability": true,
+      "layering_depth": true,
+      "feedback_clarity": true,
+      "ui_theme_consistency": true,
+      "no_raw_placeholder_feel": true
+    },
+    "hard_gate_failures": [],
+    "anti_tutorial_failures": [],
+    "scores": {
+      "core_loop_fun": 4,
+      "controls_game_feel": 4,
+      "progression_variety": 4,
+      "encounter_depth": 4,
+      "visual_polish_cohesion": 4,
+      "ux_onboarding_feedback": 4
+    },
+    "weighted_total_score": 80,
+    "category_min_pass": true,
+    "two_categories_at_least_four": true,
+    "signature_moments": [
+      "a",
+      "b"
+    ],
+    "very_good_status": false,
+    "verdict": "go",
+    "escalation_required": false,
+    "gates_passed": true,
+    "next_actions": [
+      "Improve rubric category: core_loop_fun",
+      "Improve rubric category: controls_game_feel"
+    ],
+    "notes": ""
+  }
+}

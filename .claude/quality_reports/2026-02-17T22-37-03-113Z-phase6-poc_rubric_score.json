@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-02-17T22:37:03.113Z",
+  "trigger": "poc_rubric_score",
+  "meta": {
+    "benchmark_id": "poc_prompt_02",
+    "run_id": "poc_prompt_02-1771367823112",
+    "iteration_count": 3,
+    "max_iterations": 3
+  },
+  "report": {
+    "ok": false,
+    "phase_number": 6,
+    "phase_name": "Final QA (PoC Rubric)",
+    "schema_version": "poc-quality-report-v1",
+    "benchmark_id": "poc_prompt_02",
+    "run_id": "poc_prompt_02-1771367823112",
+    "timestamp_utc": "2026-02-17T22:37:03.112Z",
+    "max_iterations": 3,
+    "iteration_count": 3,
+    "objective_quality": {
+      "gates_passed": false,
+      "failed_quality_gates": [
+        "no_critical_warnings",
+        "play_loop_complete",
+        "quality_gates_passed"
+      ],
+      "quality_report_paths": []
+    },
+    "hard_gates": {
+      "zero_script_errors": true,
+      "no_critical_warnings": false,
+      "play_loop_complete": false,
+      "controls_clear": true,
+      "no_soft_lock": true,
+      "quality_gates_passed": false
+    },
+    "anti_tutorial_visual_checks": {
+      "named_art_direction": true,
+      "palette_discipline": false,
+      "silhouette_readability": false,
+      "layering_depth": true,
+      "feedback_clarity": false,
+      "ui_theme_consistency": false,
+      "no_raw_placeholder_feel": false
+    },
+    "hard_gate_failures": [
+      "no_critical_warnings",
+      "play_loop_complete",
+      "quality_gates_passed"
+    ],
+    "anti_tutorial_failures": [
+      "palette_discipline",
+      "silhouette_readability",
+      "feedback_clarity",
+      "ui_theme_consistency",
+      "no_raw_placeholder_feel"
+    ],
+    "scores": {
+      "core_loop_fun": 2,
+      "controls_game_feel": 2,
+      "progression_variety": 2,
+      "encounter_depth": 2,
+      "visual_polish_cohesion": 2,
+      "ux_onboarding_feedback": 2
+    },
+    "weighted_total_score": 40,
+    "category_min_pass": false,
+    "two_categories_at_least_four": false,
+    "signature_moments": [],
+    "very_good_status": false,
+    "verdict": "no_go",
+    "escalation_required": true,
+    "gates_passed": false,
+    "next_actions": [
+      "Resolve critical warnings that impact runtime correctness.",
+      "Wire complete flow: menu -> gameplay -> win/lose -> restart/menu.",
+      "Re-run objective quality gates and fix every failed gate hint.",
+      "Constrain palette and use accent colors intentionally.",
+      "Improve player/enemy/hazard silhouettes for fast gameplay readability.",
+      "Add distinct visual feedback for hit/death/pickup/ability events.",
+      "Style HUD/menu to match gameplay art direction.",
+      "Replace or stylize placeholder visuals and default-looking UI elements."
+    ],
+    "notes": ""
+  }
+}
